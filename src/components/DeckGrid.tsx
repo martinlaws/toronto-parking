@@ -55,14 +55,26 @@ export default function DeckGrid({ className }: { className?: string }) {
                     <span className="relative block size-14">
                       <Board card={card} mode="thumb" className="size-14 overflow-hidden rounded-md" />
                       {/* Hidden by a rule in globals.css until the tile takes
-                          `data-solved`; `hidden` would need !important to undo. */}
+                          `data-solved`; `hidden` would need !important to undo.
+                          The ring is ink, not ground: glow on the warm ground is
+                          1.5:1, so a ground-coloured boundary left the only
+                          per-tile indicator below WCAG 1.4.11. Ink against the
+                          ground is 17.8:1, and the glow fill carries the other
+                          side, where the disc overlaps the black thumbnail. */}
                       <span
                         data-solved-dot=""
-                        className="absolute -right-1 -top-1 size-3 rounded-full bg-glow ring-2 ring-ground"
+                        className="absolute -right-1 -top-1 size-3 rounded-full bg-glow ring-2 ring-ink"
                       />
                     </span>
                     <span className="font-display text-lg font-bold tabular-nums">
                       {card.n}
+                      {/* The dot's text equivalent, revealed by the same
+                          attribute, so the link is named "1" until it is solved
+                          and "1, solved" after. Without it a screen reader gets
+                          sixty links named only by their number. */}
+                      <span data-solved-mark="" className="sr-only">
+                        , solved
+                      </span>
                     </span>
                   </Link>
                 </li>

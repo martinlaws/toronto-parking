@@ -34,7 +34,11 @@ export default async function BoardHeader({
 
   return (
     <header data-board={board.code}>
-      <p>For {board.name}.</p>
+      {/* The dedication line is this page's title, so it carries the level.
+          Nothing new reaches history or a preview card: the page is `noindex`
+          with an absolute `<title>` of the site name, and the name was already
+          in-page text. */}
+      <h1>For {board.name}.</h1>
       {board.dedication ? <p>{board.dedication}</p> : null}
       <p>
         Board {board.n} of 4. Printed in Toronto, {PRINTED}. — Martin

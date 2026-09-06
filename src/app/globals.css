@@ -180,12 +180,21 @@ html[data-orientation="top"] .tp-piece-label {
    state never re-renders the grid. The attribute lands on the tile itself,
    which is the `<a data-card>`. A `hidden` attribute would need `!important`
    to undo, because Tailwind's preflight sets one. */
-[data-solved-dot] {
+[data-solved-dot],
+[data-solved-mark] {
   display: none;
 }
 
 [data-card][data-solved="true"] [data-solved-dot] {
   display: block;
+}
+
+/* The dot's text equivalent rides the same attribute, so a screen reader and a
+   sighted reader learn the same thing at the same moment and `BoardProgress`
+   still writes one attribute and nothing else. `.sr-only` sets no `display` of
+   its own, which is what leaves this pair in charge of the reveal. */
+[data-card][data-solved="true"] [data-solved-mark] {
+  display: inline;
 }
 
 /* ── Motion ──────────────────────────────────────────────────────────────── */
