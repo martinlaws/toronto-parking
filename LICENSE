@@ -2,6 +2,11 @@ MIT License
 
 Copyright (c) 2026 Martin Laws
 
+This licence covers the code. It does not cover the derived data in
+data/deck.json, tests/fixtures/rush1000.txt, or any future data/pool-*.json:
+those boards are drawn from Michael Fogleman's Rush Hour database, and
+DATA-ATTRIBUTION.md is what covers them.
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
