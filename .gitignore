@@ -48,3 +48,9 @@ rush.txt.bz2
 # names, dedications and board codes never enter the repo
 boards.local.json
 boards.throwaway.json
+
+# The generated app icons are committed: a build must never depend on a
+# rasteriser running. A global `Icon?` rule on a case-insensitive disk
+# otherwise swallows this directory whole.
+!public/icons/
+!public/icons/**
