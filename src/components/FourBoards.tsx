@@ -16,7 +16,9 @@ export default async function FourBoards({
 }) {
   const { code } = await params;
   const canonical = normalizeCode(code);
-  if (!isValidCode(canonical)) return null;
+  // A URL that is about to be redirected reads nothing: `<BoardHeader>` sends
+  // the reader on to the canonical code, and the panel renders there instead.
+  if (canonical !== code || !isValidCode(canonical)) return null;
 
   const rows = await readPanel(canonical);
   if (!rows.some((row) => row.code === canonical)) return null;

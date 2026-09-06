@@ -37,7 +37,14 @@ export function parseCard(raw: unknown): number | null {
   return n >= 1 && n <= DECK_SIZE ? n : null;
 }
 
-/** The first unsolved card after the highest solved. Null at 0 and at DECK_SIZE. */
+/**
+ * The first unsolved card after the highest solved. Null at 0 and at DECK_SIZE.
+ *
+ * Deviation, deliberate: once the highest solved card is the last one and gaps
+ * remain, there is no card after it, so the line falls back to the earliest gap
+ * rather than disappearing. The spec hides it "at 0 or 60"; hiding it at 59 of
+ * 60 as well would leave a reader with one card left and nothing pointing at it.
+ */
 export function pickUpAt(cards: Iterable<number>): number | null {
   const set = new Set<number>();
   for (const card of cards) if (Number.isInteger(card) && card >= 1 && card <= DECK_SIZE) set.add(card);

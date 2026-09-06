@@ -89,7 +89,7 @@ async function main(argv: string[]): Promise<void> {
   }
 
   process.stdout.write(
-    `${ready.length} codes written. Delete ${options.out} once the cards are printed.\n`,
+    `${ready.length} code${ready.length === 1 ? "" : "s"} written. Delete ${options.out} once the cards are printed.\n`,
   );
 }
 
