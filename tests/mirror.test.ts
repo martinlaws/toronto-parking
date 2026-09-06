@@ -5,6 +5,8 @@ import {
   flush,
   getOutbox,
   getSolved,
+  resync,
+  setBoard,
   solvedCards,
   toggleSolve,
 } from "../src/lib/local";
@@ -16,6 +18,8 @@ import {
  */
 
 const CODE = "abc123";
+const OTHER = "def456";
+const GONE = "zzzzzz";
 
 class FakeStorage {
   private readonly entries = new Map<string, string>();
@@ -33,13 +37,43 @@ class FakeStorage {
   }
 }
 
-/** The server's hash, plus the three ways it can refuse. */
+/** The server's hash, plus the four ways it can refuse. */
 let solved: Map<number, string>;
 let offline: boolean;
 let refused: Set<number>;
 let failing: Set<number>;
 let storeDown: boolean;
+let knownBoards: Set<string>;
 let writes: string[];
+/** Every request, the board reads included, in the order they were issued. */
+let requests: string[];
+
+/**
+ * A request the test holds open. The concurrency cases all need one: a tap
+ * landing mid-replay, and a `GET` still in flight when the reader taps.
+ */
+type Gate = { arrived: Promise<void>; release: () => void };
+
+let gates: Map<string, { open: Promise<void>; announce: () => void; release: () => void }>;
+
+function gate(signature: string): Gate {
+  let release!: () => void;
+  const open = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let announce!: () => void;
+  const arrived = new Promise<void>((resolve) => {
+    announce = resolve;
+  });
+  gates.set(signature, { open, announce, release });
+  return { arrived, release };
+}
+
+/** One macrotask, which is long enough for every promise the fake network
+ *  makes: nothing in here waits on a timer. */
+function settled(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
 
 function cardsOn(): number[] {
   return [...solved.keys()].sort((a, b) => a - b);
@@ -58,15 +92,31 @@ async function fakeFetch(input: RequestInfo | URL, init: RequestInit = {}): Prom
   const url = String(input);
   const match = /^\/api\/boards\/([0-9a-z]+)(?:\/solved\/([0-9]+))?$/.exec(url);
   assert.ok(match, `unexpected url ${url}`);
+  const code = match[1];
   const card = match[2] === undefined ? null : Number(match[2]);
   const method = init.method ?? "GET";
 
+  // Logged when the request is issued, not when it answers, so a held one is
+  // on the record while the test decides what happens next to it.
+  const signature = card === null ? `GET ${code}` : `${method} ${card}`;
+  requests.push(signature);
+  if (card !== null) writes.push(signature);
+
+  const held = gates.get(signature);
+  if (held) {
+    gates.delete(signature);
+    held.announce();
+    await held.open;
+  }
+
   if (card === null) {
     if (storeDown) return new Response("", { status: 500 });
+    if (!knownBoards.has(code)) {
+      return new Response(JSON.stringify({ error: "not_found" }), { status: 404 });
+    }
     return new Response(body(), { status: 200 });
   }
 
-  writes.push(`${method} ${card}`);
   if (failing.has(card)) return new Response("", { status: 500 });
   if (refused.has(card)) return new Response(JSON.stringify({ error: "not_found" }), { status: 404 });
   if (method === "PUT") {
@@ -84,7 +134,10 @@ beforeEach(() => {
   refused = new Set();
   failing = new Set();
   storeDown = false;
+  knownBoards = new Set([CODE, OTHER]);
   writes = [];
+  requests = [];
+  gates = new Map();
 
   const target = new EventTarget();
   const fake = {
@@ -173,5 +226,155 @@ describe("replaying the outbox", () => {
     assert.equal(a, true);
     assert.equal(b, true);
     assert.deepEqual(writes, ["PUT 9"]);
+  });
+});
+
+describe("a tap that lands while a replay is running", () => {
+  it("does not let the replay put back the write the tap undid", async () => {
+    offline = true;
+    await toggleSolve(CODE, 3, true);
+    await toggleSolve(CODE, 5, true);
+    offline = false;
+
+    const first = gate("PUT 3");
+    const replaying = flush(CODE);
+    await first.arrived;
+
+    // The reader unticks card 5 while the replay is still on card 3, so the
+    // queued `put 5` it is about to reach is a write they have contradicted.
+    await toggleSolve(CODE, 5, false);
+    first.release();
+    await replaying;
+
+    assert.deepEqual(writes, ["PUT 3", "DELETE 5"]);
+    assert.deepEqual(solvedCards(CODE), [3]);
+    assert.deepEqual(cardsOn(), [3]);
+    assert.deepEqual(getOutbox(CODE), []);
+  });
+
+  it("sends a card's second write after the first, not beside it", async () => {
+    offline = true;
+    await toggleSolve(CODE, 4, true);
+    offline = false;
+
+    const open = gate("PUT 4");
+    const replaying = flush(CODE);
+    await open.arrived;
+
+    const untick = toggleSolve(CODE, 4, false);
+    await settled();
+    // Two writes for one card open at once and the store keeps whichever
+    // landed last, which need not be the tap the reader made last.
+    assert.deepEqual(requests, ["PUT 4"]);
+
+    open.release();
+    await Promise.all([replaying, untick]);
+
+    assert.deepEqual(writes, ["PUT 4", "DELETE 4"]);
+    assert.deepEqual(solvedCards(CODE), []);
+    assert.deepEqual(cardsOn(), []);
+    assert.deepEqual(getOutbox(CODE), []);
+  });
+});
+
+describe("a pull that is already open when the reader taps", () => {
+  it("keeps the tap rather than painting the older list back over it", async () => {
+    solved.set(7, "2026-09-01T00:00:00.000Z");
+    assert.equal(await flush(CODE), true);
+    assert.deepEqual(solvedCards(CODE), [7]);
+
+    const pulling = gate(`GET ${CODE}`);
+    const syncing = flush(CODE);
+    await pulling.arrived;
+
+    // The untick leaves the outbox at once, so the outbox alone cannot tell
+    // the arriving list that card 7 is stale.
+    const writing = gate("DELETE 7");
+    const tapping = toggleSolve(CODE, 7, false);
+    await writing.arrived;
+
+    pulling.release();
+    await syncing;
+    assert.deepEqual(solvedCards(CODE), []);
+
+    writing.release();
+    await tapping;
+    assert.deepEqual(solvedCards(CODE), []);
+    assert.deepEqual(cardsOn(), []);
+    assert.deepEqual(getOutbox(CODE), []);
+  });
+});
+
+describe("a board the store has never heard of", () => {
+  it("is an answer, not an unreachable store", async () => {
+    offline = true;
+    await toggleSolve(GONE, 2, true);
+    offline = false;
+    refused.add(2);
+
+    assert.equal(await flush(GONE), true);
+    assert.deepEqual(requests, ["PUT 2", `GET ${GONE}`]);
+    assert.deepEqual(solvedCards(GONE), []);
+    assert.deepEqual(getOutbox(GONE), []);
+  });
+});
+
+describe("claiming a board", () => {
+  it("sends the solves it carries over rather than only queueing them", async () => {
+    await toggleSolve(null, 2, true);
+    assert.deepEqual(solvedCards(null), [2]);
+
+    setBoard({ code: CODE, n: 1, name: "Alpha" });
+    await settled();
+
+    assert.deepEqual(writes, ["PUT 2"]);
+    assert.deepEqual(cardsOn(), [2]);
+    assert.deepEqual(solvedCards(CODE), [2]);
+    assert.deepEqual(getOutbox(CODE), []);
+  });
+
+  it("drains the board being switched away from", async () => {
+    setBoard({ code: CODE, n: 1, name: "Alpha" });
+    offline = true;
+    await toggleSolve(CODE, 6, true);
+    assert.deepEqual(getOutbox(CODE).map((op) => op.card), [6]);
+
+    offline = false;
+    setBoard({ code: OTHER, n: 2, name: "Bravo" });
+    await settled();
+
+    assert.deepEqual(writes, ["PUT 6"]);
+    assert.deepEqual(cardsOn(), [6]);
+    assert.deepEqual(getOutbox(CODE), []);
+  });
+});
+
+describe("coming back online", () => {
+  it("starts a fresh pass rather than joining the request that hung", async () => {
+    offline = true;
+    await toggleSolve(CODE, 1, true);
+    offline = false;
+
+    const stuck = gate("PUT 1");
+    const mounted = flush(CODE);
+    await stuck.arrived;
+
+    // The connection drops under the open request, then comes back.
+    failing.add(1);
+    const back = resync(CODE);
+    assert.notStrictEqual(mounted, back);
+
+    const retry = gate("PUT 1");
+    stuck.release();
+    assert.equal(await mounted, false);
+
+    await retry.arrived;
+    failing.delete(1);
+    retry.release();
+
+    assert.equal(await back, true);
+    assert.deepEqual(writes, ["PUT 1", "PUT 1"]);
+    assert.deepEqual(cardsOn(), [1]);
+    assert.deepEqual(getOutbox(CODE), []);
   });
 });

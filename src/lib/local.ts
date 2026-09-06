@@ -116,8 +116,14 @@ export function getBoard(): StoredBoard | null {
 /**
  * Claiming a board for the first time carries every anonymous solve across with
  * its original timestamp, and queues each one so the other boards see it.
+ *
+ * Both directions then get a send. Queueing alone leaves the carried solves
+ * sitting until something remounts with this code, and the board being switched
+ * away from keeps its pending writes for good: no page the reader is likely to
+ * open next syncs a code that is no longer `tp.board`.
  */
 export function setBoard(board: Omit<StoredBoard, "at"> & { at?: string }): void {
+  const previous = getBoard()?.code;
   const stored: StoredBoard = {
     code: board.code,
     n: board.n,
@@ -125,14 +131,20 @@ export function setBoard(board: Omit<StoredBoard, "at"> & { at?: string }): void
     at: board.at ?? new Date().toISOString(),
   };
   write(BOARD_KEY, stored);
-  adoptLocalSolves(stored.code);
+  const carried = adoptLocalSolves(stored.code);
   announce();
+
+  if (previous && previous !== stored.code && getOutbox(previous).length > 0) {
+    void flush(previous);
+  }
+  if (carried) void flush(stored.code);
 }
 
-export function adoptLocalSolves(code: string): void {
+/** True when it carried something across, so the caller knows to send. */
+export function adoptLocalSolves(code: string): boolean {
   const local = getSolved(null);
   const entries = Object.entries(local);
-  if (entries.length === 0) return;
+  if (entries.length === 0) return false;
   const mine = getSolved(code);
   for (const [card, at] of entries) {
     const existing = mine[card];
@@ -141,6 +153,7 @@ export function adoptLocalSolves(code: string): void {
   }
   setSolved(code, mine);
   drop(LOCAL_SOLVED_KEY);
+  return true;
 }
 
 // ── Solves ──────────────────────────────────────────────────────────────────
@@ -173,16 +186,16 @@ export function paintUnsolved(code: string | null, card: number): void {
 }
 
 /**
- * Adopts the server's list, then lays anything still waiting in the outbox back
- * over it. A queued write is one the server has not seen, so it cannot have been
- * contradicted: without this, adopting mid-replay takes the reader's own tick
- * off the deck while their write is still on its way. Last write wins at the
- * server, and there are no tombstones.
+ * Adopts the server's list, then lays every write the server cannot have seen
+ * yet back over it. Such a write cannot have been contradicted, so without this
+ * an adopt mid-replay takes the reader's own tick off the deck while their
+ * write is still on its way. Last write wins at the server, and there are no
+ * tombstones.
  */
 export function adoptServerSolves(code: string, solved: { card: number; at: string }[]): void {
   const map: SolvedMap = {};
   for (const solve of solved) map[String(solve.card)] = solve.at;
-  for (const pending of getOutbox(code)) {
+  for (const pending of pendingWrites(code)) {
     if (pending.op === "put") map[String(pending.card)] = pending.at;
     else delete map[String(pending.card)];
   }
@@ -227,11 +240,16 @@ export function dequeueCard(code: string, card: number): void {
   );
 }
 
+/** Drops one exact write, leaving a newer one for the same card alone. */
 export function unqueue(code: string, op: OutboxOp): void {
   setOutbox(
     code,
-    getOutbox(code).filter((pending) => !(pending.card === op.card && pending.op === op.op)),
+    getOutbox(code).filter((pending) => !isSameOp(pending, op)),
   );
+}
+
+function isSameOp(a: OutboxOp, b: OutboxOp): boolean {
+  return a.card === b.card && a.op === b.op && a.at === b.at;
 }
 
 // ── The network half ────────────────────────────────────────────────────────
@@ -254,6 +272,64 @@ function hold(seconds: number): void {
 }
 
 type SendResult = "ok" | "retry" | "drop";
+
+type OpenWrite = { op: OutboxOp; done: Promise<SendResult> };
+
+/**
+ * Writes that have left the outbox and are open on the network, one per card
+ * per board. The outbox on its own is not the whole of "what the server has not
+ * seen yet": between `dequeueCard()` and the response a write is in neither
+ * place, and both `adoptServerSolves()` and `replay()` have to account for it.
+ */
+const inFlight = new Map<string, Map<number, OpenWrite>>();
+
+/**
+ * Every write the server's list cannot reflect yet. The outbox comes last: a
+ * queued write for a card that already has one on the wire is the later tap.
+ */
+function pendingWrites(code: string): OutboxOp[] {
+  const open = [...(inFlight.get(code)?.values() ?? [])].map((write) => write.op);
+  return [...open, ...getOutbox(code)];
+}
+
+/**
+ * True when a later tap has replaced this queued write or put one for the same
+ * card on the wire. Sending it then would put back a solve the reader has just
+ * undone, on the phone, in the store and on every other board's panel.
+ */
+function superseded(code: string, op: OutboxOp): boolean {
+  if (inFlight.get(code)?.has(op.card)) return true;
+  return !getOutbox(code).some((pending) => isSameOp(pending, op));
+}
+
+/**
+ * `send()`, on the record for as long as it is open. A second write to the same
+ * card waits for the first rather than racing it: two open at once and the
+ * store keeps whichever landed last, which need not be the tap the reader made
+ * last.
+ */
+function sendPending(code: string, op: OutboxOp): Promise<SendResult> {
+  const open = inFlight.get(code) ?? new Map<number, OpenWrite>();
+  inFlight.set(code, open);
+
+  const ahead = open.get(op.card)?.done;
+  const after = ahead
+    ? ahead.then(
+        () => undefined,
+        () => undefined,
+      )
+    : Promise.resolve();
+  const done = after.then(() => send(code, op));
+
+  const write: OpenWrite = { op, done };
+  open.set(op.card, write);
+
+  return done.finally(() => {
+    // Identity, not card: a newer write for the card owns the slot by now.
+    if (open.get(op.card) === write) open.delete(op.card);
+    if (open.size === 0 && inFlight.get(code) === open) inFlight.delete(code);
+  });
+}
 
 function adoptBody(code: string, body: unknown): void {
   if (!body || typeof body !== "object") return;
@@ -323,7 +399,7 @@ export async function toggleSolve(
     return;
   }
 
-  const result = await send(code, op);
+  const result = await sendPending(code, op);
   if (result === "retry") {
     queue(code, op);
   } else if (result === "drop") {
@@ -338,7 +414,10 @@ export async function pull(code: string): Promise<boolean> {
     const response = await fetch(`/api/boards/${code}`, { cache: "no-store" });
     if (!response.ok) {
       if (response.status === 429) hold(Number(response.headers.get("Retry-After")) || 60);
-      return false;
+      // A 404 is the store answering, not an outage: there is no board at this
+      // code, so nothing is on its way to one and the offline line would be a
+      // lie under the notice that already says the code is not one of the four.
+      return response.status === 404;
     }
     adoptBody(code, await response.json());
     return true;
@@ -350,22 +429,51 @@ export async function pull(code: string): Promise<boolean> {
 const running = new Map<string, Promise<boolean>>();
 
 /**
- * On mount and on `online`: replay the outbox in order, then pull and adopt.
- * The card page and the deck page both start one, so a second call while the
- * first is still going joins it rather than replaying the same writes twice.
+ * On mount: replay the outbox in order, then pull and adopt. The card page and
+ * the deck page both start one, so a second call while the first is still going
+ * joins it rather than replaying the same writes twice.
  */
 export function flush(code: string): Promise<boolean> {
   const started = running.get(code);
   if (started) return started;
-  const run = replay(code).finally(() => running.delete(code));
-  running.set(code, run);
-  return run;
+  return track(code, replay(code));
+}
+
+/**
+ * The reconnect. Joining is right for two components mounting together and
+ * wrong for `online`, where the replay already in `running` is the one stuck on
+ * the connection that just came back: this chains a fresh pass behind it.
+ */
+export function resync(code: string): Promise<boolean> {
+  const started = running.get(code);
+  if (!started) return flush(code);
+  return track(
+    code,
+    started.then(
+      () => replay(code),
+      () => replay(code),
+    ),
+  );
+}
+
+/** Holds the current run for `flush()` to join, and clears it only if it is
+ *  still the current one: `resync()` can replace it before it settles. */
+function track(code: string, run: Promise<boolean>): Promise<boolean> {
+  const held = run.finally(() => {
+    if (running.get(code) === held) running.delete(code);
+  });
+  running.set(code, held);
+  return held;
 }
 
 async function replay(code: string): Promise<boolean> {
   if (onHold()) return false;
+  // The snapshot fixes the order; the outbox stays the truth. A tap landing
+  // while this runs takes its card's write out of the outbox or puts a
+  // contradicting one on the wire, and either way the old one must not go.
   for (const op of getOutbox(code)) {
-    const result = await send(code, op);
+    if (superseded(code, op)) continue;
+    const result = await sendPending(code, op);
     if (result === "retry") return false;
     unqueue(code, op);
     if (result === "drop") {

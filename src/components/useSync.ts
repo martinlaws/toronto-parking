@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { flush } from "@/lib/local";
+import { flush, resync } from "@/lib/local";
 
 /**
  * Replay the outbox, then pull and adopt: on mount and on `online`.
@@ -13,7 +13,9 @@ import { flush } from "@/lib/local";
  * the store from there, without waiting for a walk back to the deck.
  *
  * Returns false while the store is unreachable. Two components on one page
- * share a single replay: `flush()` coalesces per code.
+ * share a single replay: `flush()` coalesces per code. The reconnect uses
+ * `resync()` instead, which chains: the replay it would otherwise join is the
+ * one still hanging on the connection that has only just come back.
  */
 export function useSync(code: string | null): boolean {
   const [reachable, setReachable] = useState(true);
@@ -21,16 +23,17 @@ export function useSync(code: string | null): boolean {
   useEffect(() => {
     if (!code) return;
     let live = true;
-    const sync = () => {
-      void flush(code).then((ok) => {
-        if (live) setReachable(ok);
-      });
+    const settle = (ok: boolean) => {
+      if (live) setReachable(ok);
     };
-    sync();
-    window.addEventListener("online", sync);
+    void flush(code).then(settle);
+    const back = () => {
+      void resync(code).then(settle);
+    };
+    window.addEventListener("online", back);
     return () => {
       live = false;
-      window.removeEventListener("online", sync);
+      window.removeEventListener("online", back);
     };
   }, [code]);
 
