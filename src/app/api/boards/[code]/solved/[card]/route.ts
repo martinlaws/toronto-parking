@@ -28,7 +28,9 @@ export async function PUT(
   const n = parseCard(card);
   if (n === null) return badCard();
 
-  const at = resolveAt(await readAt(request));
+  const field = await readAt(request);
+  if (!field.ok) return badAt();
+  const at = resolveAt(field.at);
   if (!at.ok) return badAt();
 
   const canonical = normalizeCode(code);

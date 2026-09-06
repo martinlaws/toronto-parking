@@ -40,15 +40,32 @@ export async function rateLimited(request: NextRequest): Promise<Response | null
   });
 }
 
-/** `{at}` off a request body that may be absent, empty or not JSON at all. */
-export async function readAt(request: NextRequest): Promise<unknown> {
+/** An `at` the route can act on, or the body that could not be read at all. */
+export type AtField = { ok: true; at: unknown } | { ok: false };
+
+/**
+ * `{at}` off a request body that may be absent, empty or not JSON at all. The
+ * three cases are kept apart: no body means the server times the solve, a body
+ * that will not parse is a `bad_at` rather than a silent server timestamp, and
+ * a parsed body without an `at` is the absent case again.
+ */
+export async function readAt(request: NextRequest): Promise<AtField> {
+  let raw: string;
   try {
-    const body: unknown = await request.json();
-    if (body && typeof body === "object" && "at" in body) {
-      return (body as { at: unknown }).at;
-    }
-    return undefined;
+    raw = await request.text();
   } catch {
-    return undefined;
+    return { ok: false };
   }
+  if (raw.trim() === "") return { ok: true, at: undefined };
+
+  let body: unknown;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    return { ok: false };
+  }
+  if (body && typeof body === "object" && "at" in body) {
+    return { ok: true, at: (body as { at: unknown }).at };
+  }
+  return { ok: true, at: undefined };
 }
