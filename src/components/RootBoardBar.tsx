@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { normalizeCode } from "@/lib/code";
 import { getBoard } from "@/lib/local";
+import { CONTROL, FIELD } from "@/lib/ui";
 
 import { useMirror } from "./useMirror";
 
@@ -33,6 +34,7 @@ export default function RootBoardBar() {
   return (
     <form
       data-board-bar="empty"
+      className="flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault();
         const code = normalizeCode(typed);
@@ -41,19 +43,24 @@ export default function RootBoardBar() {
       }}
     >
       <label htmlFor="board-code">Have a board? Enter the code from the card in the box.</label>
-      <input
-        id="board-code"
-        name="code"
-        value={typed}
-        onChange={(event) => setTyped(event.target.value)}
-        autoComplete="off"
-        autoCapitalize="off"
-        autoCorrect="off"
-        spellCheck={false}
-        inputMode="text"
-        maxLength={12}
-      />
-      <button type="submit">Open</button>
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          id="board-code"
+          name="code"
+          value={typed}
+          onChange={(event) => setTyped(event.target.value)}
+          autoComplete="off"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          inputMode="text"
+          maxLength={12}
+          className={`${FIELD} min-w-0 flex-1`}
+        />
+        <button type="submit" className={`${CONTROL} shrink-0`}>
+          Open
+        </button>
+      </div>
     </form>
   );
 }

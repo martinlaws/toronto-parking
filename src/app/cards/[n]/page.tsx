@@ -85,14 +85,19 @@ export default async function CardPage({ params }: PageProps<"/cards/[n]">) {
 
           {/* 4 · Read it aloud */}
           <section aria-labelledby="read-aloud">
-            <details className="rounded-2xl border border-ink/12 px-5 py-4">
+            {/* The vertical padding sits on the summary, not on the details:
+                only the summary toggles, so padding on the wrapper made the
+                block look tall while the hit area stayed one 32px line. 2rem of
+                line box plus `py-4` is 64px, clear of the 44px floor. The
+                summary keeps `display: list-item`, so it keeps its marker. */}
+            <details className="rounded-2xl border border-ink/12 px-5">
               <summary
                 id="read-aloud"
-                className="cursor-pointer font-display text-2xl font-bold marker:text-ink/40"
+                className="cursor-pointer py-4 font-display text-2xl font-bold marker:text-ink/40"
               >
                 Read it aloud
               </summary>
-              <ol className="mt-4 space-y-1.5 text-lg leading-relaxed">
+              <ol className="mb-5 space-y-1.5 text-lg leading-relaxed">
                 {sentences.map((line) => (
                   <li key={line}>{line}</li>
                 ))}
