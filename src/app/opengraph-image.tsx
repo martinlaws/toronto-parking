@@ -47,7 +47,7 @@ export default function Image() {
             {SITE_NAME}
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", fontSize: 32, marginTop: 24, opacity: 0.7, lineHeight: 1.35 }}>
-            {DECK_SIZE} numbered layouts for a printed sliding-car puzzle
+            {DECK_SIZE} numbered layouts for a 3D-printed sliding-car puzzle
           </div>
         </div>
       </div>

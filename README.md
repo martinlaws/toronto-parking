@@ -23,7 +23,7 @@ Node 24 and pnpm 11.
 ```bash
 pnpm install
 pnpm dev            # http://localhost:3000
-pnpm build          # production build; the route tree should show every /cards/N as static
+pnpm build          # production build; every /cards/N row should be ○ or ◐, never ƒ
 pnpm test           # node:test over tests/**
 pnpm lint
 pnpm typecheck
