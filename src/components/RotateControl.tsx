@@ -1,13 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 /**
  * The two controls on the diagram's bottom edge, plus the colour-blind label
  * toggle. All three write a `data-` attribute on `<html>` that the stylesheet
  * reads, so a tap re-paints the board without re-rendering a single node.
  *
- * Every `localStorage` access sits in a `try`/`catch`: a locked-down browser
+ * The server has no idea what this device stored, so every stored value goes
+ * through `useSyncExternalStore` with a server snapshot equal to the default:
+ * the first paint matches the HTML, and the stored value lands on the next
+ * render rather than as a hydration mismatch.
+ *
+ * Every `localStorage` access sits in a `try`/`catch`. A locked-down browser
  * throws on the getter itself, and none of this is worth an error boundary.
  */
 
@@ -40,55 +45,104 @@ function isOrientation(value: string | null): value is Orientation {
   return value !== null && (ORIENTATIONS as readonly string[]).includes(value);
 }
 
+// A two-value store, read once and kept in module scope so the snapshot is
+// referentially stable; another tab's write arrives through `storage`.
+const listeners = new Set<() => void>();
+let orientationCache: Orientation | null = null;
+let labelsCache: boolean | null = null;
+
+function subscribe(onChange: () => void): () => void {
+  listeners.add(onChange);
+  const onStorage = () => {
+    orientationCache = null;
+    labelsCache = null;
+    onChange();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    listeners.delete(onChange);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+function emit(): void {
+  for (const listener of listeners) listener();
+}
+
+function orientationSnapshot(): Orientation {
+  if (orientationCache === null) {
+    const stored = readStored(ORIENTATION_KEY);
+    orientationCache = isOrientation(stored) ? stored : DEFAULT_ORIENTATION;
+  }
+  return orientationCache;
+}
+
+function labelsSnapshot(): boolean {
+  if (labelsCache === null) labelsCache = readStored(LABELS_KEY) === "on";
+  return labelsCache;
+}
+
+function serverOrientation(): Orientation {
+  return DEFAULT_ORIENTATION;
+}
+
+function serverFalse(): boolean {
+  return false;
+}
+
+function serverTrue(): boolean {
+  return true;
+}
+
+function neverChanges(): () => void {
+  return () => {};
+}
+
+function wakeSupportedSnapshot(): boolean {
+  return "wakeLock" in navigator;
+}
+
 const BUTTON =
   "tp-fade inline-flex min-h-11 items-center gap-2 rounded-full border border-ink/15 px-4 py-2 text-sm font-medium hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink";
 
 export default function RotateControl() {
-  // The server cannot know what this device stored, so the first paint is the
-  // default and the effect below corrects it after hydration.
-  const [orientation, setOrientation] = useState<Orientation>(DEFAULT_ORIENTATION);
-  const [labels, setLabels] = useState(false);
-  const [ready, setReady] = useState(false);
-  const [wakeSupported, setWakeSupported] = useState(false);
+  const orientation = useSyncExternalStore(subscribe, orientationSnapshot, serverOrientation);
+  const labels = useSyncExternalStore(subscribe, labelsSnapshot, serverFalse);
+  const wakeSupported = useSyncExternalStore(neverChanges, wakeSupportedSnapshot, serverFalse);
+  const hydrated = useSyncExternalStore(neverChanges, serverTrue, serverFalse);
+
   const [awake, setAwake] = useState(false);
   const sentinel = useRef<WakeLockSentinel | null>(null);
   const wanted = useRef(false);
 
+  // The stylesheet is the external system here: it reads these two attributes
+  // and nothing in React re-renders when they change.
   useEffect(() => {
-    const stored = readStored(ORIENTATION_KEY);
-    const next = isOrientation(stored) ? stored : DEFAULT_ORIENTATION;
-    setOrientation(next);
-    document.documentElement.dataset.orientation = next;
+    document.documentElement.dataset.orientation = orientation;
+  }, [orientation]);
 
-    const storedLabels = readStored(LABELS_KEY) === "on";
-    setLabels(storedLabels);
-    document.documentElement.dataset.labels = storedLabels ? "on" : "off";
-
-    setWakeSupported("wakeLock" in navigator);
-    setReady(true);
-  }, []);
+  useEffect(() => {
+    document.documentElement.dataset.labels = labels ? "on" : "off";
+  }, [labels]);
 
   const rotate = useCallback(() => {
-    setOrientation((current) => {
-      const next = ORIENTATIONS[(ORIENTATIONS.indexOf(current) + 1) % ORIENTATIONS.length];
-      document.documentElement.dataset.orientation = next;
-      writeStored(ORIENTATION_KEY, next);
-      return next;
-    });
+    const current = orientationSnapshot();
+    const next = ORIENTATIONS[(ORIENTATIONS.indexOf(current) + 1) % ORIENTATIONS.length];
+    orientationCache = next;
+    writeStored(ORIENTATION_KEY, next);
+    emit();
   }, []);
 
   const toggleLabels = useCallback(() => {
-    setLabels((current) => {
-      const next = !current;
-      document.documentElement.dataset.labels = next ? "on" : "off";
-      writeStored(LABELS_KEY, next ? "on" : "off");
-      return next;
-    });
+    const next = !labelsSnapshot();
+    labelsCache = next;
+    writeStored(LABELS_KEY, next ? "on" : "off");
+    emit();
   }, []);
 
   // The lock is asked for on a tap and never on mount: an unprompted request is
-  // rejected by every browser that implements it, and it lives for this page
-  // load only, so nothing about it is stored.
+  // refused by every browser that implements it. It lives for this page load
+  // only, so nothing about it is stored.
   const acquire = useCallback(async () => {
     try {
       const lock = await navigator.wakeLock.request("screen");
@@ -107,13 +161,14 @@ export default function RotateControl() {
   const toggleAwake = useCallback(async () => {
     if (sentinel.current) {
       wanted.current = false;
+      const lock = sentinel.current;
+      sentinel.current = null;
+      setAwake(false);
       try {
-        await sentinel.current.release();
+        await lock.release();
       } catch {
         // Already gone.
       }
-      sentinel.current = null;
-      setAwake(false);
       return;
     }
     wanted.current = true;
@@ -123,22 +178,28 @@ export default function RotateControl() {
   // A screen lock is dropped whenever the tab is hidden, so it has to be asked
   // for again on the way back.
   useEffect(() => {
-    function onVisible() {
+    function onVisibilityChange() {
       if (document.visibilityState === "visible" && wanted.current && !sentinel.current) {
         void acquire();
       }
     }
-    document.addEventListener("visibilitychange", onVisible);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
-      document.removeEventListener("visibilitychange", onVisible);
-      void sentinel.current?.release().catch(() => {});
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      const lock = sentinel.current;
       sentinel.current = null;
+      void lock?.release().catch(() => {});
     };
   }, [acquire]);
 
   return (
     <div className="flex flex-wrap items-center justify-center gap-3">
-      <button type="button" onClick={rotate} className={BUTTON} aria-label={`Rotate the board. The exit is at the ${orientation}.`}>
+      <button
+        type="button"
+        onClick={rotate}
+        className={BUTTON}
+        aria-label={`Rotate the board. The exit is at the ${orientation}.`}
+      >
         <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 12a9 9 0 1 1-2.6-6.4" />
           <path d="M21 3v5h-5" />
@@ -164,8 +225,8 @@ export default function RotateControl() {
         </button>
       ) : null}
 
-      {/* The fallback replaces the button rather than sitting beside a dead one. */}
-      <p className="w-full text-center text-sm text-ink/60" hidden={!ready || wakeSupported}>
+      {/* The line replaces the button rather than sitting beside a dead one. */}
+      <p className="w-full text-center text-sm text-ink/60" hidden={!hydrated || wakeSupported}>
         This browser can&apos;t hold the screen on. Turn your auto-lock up for a bit.
       </p>
     </div>

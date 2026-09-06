@@ -33,21 +33,20 @@ export default function Image() {
           fontFamily: "sans-serif",
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} width={520} height={520} alt="" />
+        <img src={src} width={520} height={520} alt="" style={{ flexShrink: 0 }} />
         <div
           style={{
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            marginLeft: 64,
-            flexGrow: 1,
+            marginLeft: 56,
+            width: 470,
           }}
         >
-          <div style={{ display: "flex", fontSize: 86, fontWeight: 800, lineHeight: 1.05 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", fontSize: 78, fontWeight: 800, lineHeight: 1.1 }}>
             {SITE_NAME}
           </div>
-          <div style={{ display: "flex", fontSize: 36, marginTop: 24, opacity: 0.7 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", fontSize: 32, marginTop: 24, opacity: 0.7, lineHeight: 1.35 }}>
             {DECK_SIZE} numbered layouts for a printed sliding-car puzzle
           </div>
         </div>

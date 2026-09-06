@@ -48,15 +48,14 @@ export default async function Image({ params }: { params: Promise<{ n: string }>
           fontFamily: "sans-serif",
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} width={BOARD_PX} height={BOARD_PX} alt="" />
+        <img src={src} width={BOARD_PX} height={BOARD_PX} alt="" style={{ flexShrink: 0 }} />
         <div
           style={{
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            marginLeft: 64,
-            flexGrow: 1,
+            marginLeft: 56,
+            width: 404,
           }}
         >
           <div style={{ display: "flex", fontSize: 180, fontWeight: 800, lineHeight: 1 }}>
@@ -75,8 +74,7 @@ export default async function Image({ params }: { params: Promise<{ n: string }>
             right: 60,
             bottom: 40,
             display: "flex",
-            fontSize: 28,
-            letterSpacing: 1,
+            fontSize: 26,
             opacity: 0.55,
           }}
         >
