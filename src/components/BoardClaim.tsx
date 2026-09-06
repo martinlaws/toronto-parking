@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect } from "react";
 
 import { getBoard, setBoard } from "@/lib/local";
+import { CONTROL } from "@/lib/ui";
 
 import { useMirror } from "./useMirror";
 
@@ -35,7 +36,7 @@ export default function BoardClaim({
     <p data-board-claim="">
       This is {name}&apos;s board. Yours is{" "}
       <Link href={`/b/${mine.code}`}>{mine.name}&apos;s →</Link>{" "}
-      <button type="button" onClick={() => setBoard({ code, n, name })}>
+      <button type="button" className={CONTROL} onClick={() => setBoard({ code, n, name })}>
         Make this my board
       </button>
     </p>

@@ -22,10 +22,11 @@ export default function DeckPage() {
           field's own label a line below it, and in the remembered state it
           asked a question the reader had already answered. Unnamed, the box is
           a plain grouping element, and the content names itself — a labelled
-          field, or the link to the remembered board. */}
-      <section className="mb-8 rounded-2xl border border-ink/12 bg-ground-edge/60 px-4 py-4 sm:px-6">
+          field, or the link to the remembered board. A `div` rather than an
+          unnamed `section`, so the markup claims only what it is. */}
+      <div className="mb-8 rounded-2xl border border-ink/12 bg-ground-edge/60 px-4 py-4 sm:px-6">
         <RootBoardBar />
-      </section>
+      </div>
 
       <div className="mb-10" data-board-progress>
         <BoardProgress />

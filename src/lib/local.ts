@@ -347,17 +347,25 @@ function adoptBody(code: string, body: unknown): void {
   );
 }
 
+/** How long a single mirror write waits before it becomes an outbox entry. */
+const SEND_TIMEOUT_MS = 8000;
+
 async function send(code: string, op: OutboxOp): Promise<SendResult> {
   const url = `/api/boards/${code}/solved/${op.card}`;
   try {
+    // A request that never answers must not hold the toggle open forever: the
+    // control no longer disables itself, so a hung fetch would look live and
+    // silently swallow taps. On timeout this falls into the catch below and
+    // takes the ordinary retry path into the outbox.
     const response =
       op.op === "put"
         ? await fetch(url, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ at: op.at }),
+            signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
           })
-        : await fetch(url, { method: "DELETE" });
+        : await fetch(url, { method: "DELETE", signal: AbortSignal.timeout(SEND_TIMEOUT_MS) });
 
     if (response.ok) {
       adoptBody(code, await response.json());
@@ -411,7 +419,10 @@ export async function toggleSolve(
 /** Pulls the server's list and adopts it. False when the store was unreachable. */
 export async function pull(code: string): Promise<boolean> {
   try {
-    const response = await fetch(`/api/boards/${code}`, { cache: "no-store" });
+    const response = await fetch(`/api/boards/${code}`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+    });
     if (!response.ok) {
       if (response.status === 429) hold(Number(response.headers.get("Retry-After")) || 60);
       // A 404 is the store answering, not an outage: there is no board at this

@@ -59,7 +59,7 @@ export default function DeckGrid({ className }: { className?: string }) {
                           The ring is ink, not ground: glow on the warm ground is
                           1.5:1, so a ground-coloured boundary left the only
                           per-tile indicator below WCAG 1.4.11. Ink against the
-                          ground is 17.8:1, and the glow fill carries the other
+                          ground is 17.6:1, and the glow fill carries the other
                           side, where the disc overlaps the black thumbnail. */}
                       <span
                         data-solved-dot=""
