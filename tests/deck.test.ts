@@ -282,15 +282,18 @@ test("the header describes the file it heads", () => {
   }
 });
 
-const rushPath = process.env.RUSH_TXT ?? "./rush.txt";
-const haveRush = existsSync(rushPath);
+// `rush.txt` is 115 MB of Fogleman's and lives beside the repo, so CI has no
+// copy: without one this case skips rather than failing.
+const rushPath = [process.env.RUSH_TXT, "./rush.txt"].find(
+  (p) => p !== undefined && p !== "" && existsSync(p),
+);
 
 test(
   "building twice from rush.txt gives the same bytes",
-  { skip: haveRush ? false : "rush.txt not found; set RUSH_TXT to run this" },
+  { skip: rushPath === undefined ? "rush.txt not found; set RUSH_TXT to run this" : false },
   () => {
-    const first = buildDeck(rushPath);
-    const second = buildDeck(rushPath);
+    const first = buildDeck(rushPath!);
+    const second = buildDeck(rushPath!);
     assert.equal(sha256(first), sha256(second), "two builds disagree");
     assert.equal(sha256(first), DECK_SHA256, "the build misses the acceptance digest");
     assert.equal(first, text, "the build differs from the committed data/deck.json");
