@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 
 import Board from "@/components/Board";
+import TierProgress from "@/components/TierProgress";
 import { cards } from "@/lib/deck";
 import { TIERS, tierLabel } from "@/lib/tiers";
 
@@ -9,13 +10,19 @@ import { TIERS, tierLabel } from "@/lib/tiers";
  * The deck: five tier sections, sixty tiles, no filters. A Server Component,
  * prerendered, shared by `/` and `/b/[code]`.
  *
- * Every tile carries `data-card="<n>"`, and every section the counters lane C
- * writes into, so the client overlay paints solved state onto markup that is
- * already on the page instead of re-rendering the grid.
+ * Every tile carries `data-card="<n>"`, which is the only thing lane C's
+ * overlay touches: it paints `data-solved` onto markup already on the page
+ * instead of re-rendering the grid. `TierProgress` reads those same tiles back
+ * to fill each tier counter and bar, so the counts stay downstream of one
+ * attribute and this file stays a Server Component.
  */
 export default function DeckGrid({ className }: { className?: string }) {
   return (
-    <div className={className ? `space-y-12 ${className}` : "space-y-12"}>
+    <div
+      data-deck-grid=""
+      className={className ? `space-y-12 ${className}` : "space-y-12"}
+    >
+      <TierProgress />
       {TIERS.map((tier) => {
         const tierCards = cards.filter((c) => c.tier === tier);
         return (
@@ -29,9 +36,11 @@ export default function DeckGrid({ className }: { className?: string }) {
               </p>
             </div>
             <div className="mb-5 h-1 w-full overflow-hidden rounded-full bg-ink/10">
+              {/* No transition: the bar is set once, and rotate plus the
+                  150ms fade are the only motion the page is allowed. */}
               <div
                 data-tier-bar={tier}
-                className="tp-fade h-full rounded-full bg-glow"
+                className="h-full rounded-full bg-glow"
                 style={{ width: "0%" }}
               />
             </div>
@@ -45,9 +54,10 @@ export default function DeckGrid({ className }: { className?: string }) {
                   >
                     <span className="relative block size-14">
                       <Board card={card} mode="thumb" className="size-14 overflow-hidden rounded-md" />
+                      {/* Hidden by a rule in globals.css until the tile takes
+                          `data-solved`; `hidden` would need !important to undo. */}
                       <span
-                        data-solved-dot
-                        hidden
+                        data-solved-dot=""
                         className="absolute -right-1 -top-1 size-3 rounded-full bg-glow ring-2 ring-ground"
                       />
                     </span>

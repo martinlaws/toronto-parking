@@ -221,6 +221,9 @@ function chrome(mode: BoardMode): string {
     out += `<polyline points="${n(cx - 11)},${mid - 15} ${n(cx + 5)},${mid} ${n(cx - 11)},${mid + 15}" fill="none" stroke="${COLOURS.glow}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>`;
   }
 
+  // Thumbs drop both of these on top of the highlight, ribs and windscreens the
+  // spec names: 85 sub-pixel circles per tile, times sixty tiles, that read as
+  // grey haze rather than as detail at 56px.
   if (mode !== "thumb") {
     // White dots at cell centres, under the pieces: the translucent bodies let
     // them through, as on the real print.
@@ -256,7 +259,12 @@ function frameLabels(): string {
  * @param pieces  the card's pieces, hero first, in `data/deck.json` order
  * @param mode    `card` full detail and lettering, `thumb` the 56px deck tile,
  *                `og` full detail with no text (the image route rasterises this
- *                through satori, which has no stylesheet and no font for it)
+ *                through satori, which has no stylesheet and no font for it).
+ *                `thumb` drops more than the spec's highlight, ribs and
+ *                windscreens: the 49 pegs and the 36 white cell dots go too.
+ *                At 56px they land under a pixel each and only turn the
+ *                asphalt grey, and dropping them takes 85 nodes out of every
+ *                one of the sixty tiles on the deck page.
  * @param board   Fogleman's 36-character string, carried as `data-board`
  * @param label   the `aria-label`; defaults to the piece list
  */

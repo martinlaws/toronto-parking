@@ -27,12 +27,12 @@ export const metadata: Metadata = {
   },
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
+  // No `title`, `description` or `url` here: a card page sets its own, and
+  // pinning them in the layout would make every "I'm stuck on #31" preview
+  // read as the generic site pointing back at the root.
   openGraph: {
     type: "website",
     siteName: SITE_NAME,
-    title: SITE_NAME,
-    description: SITE_DESCRIPTION,
-    url: "/",
   },
   twitter: { card: "summary_large_image" },
 };

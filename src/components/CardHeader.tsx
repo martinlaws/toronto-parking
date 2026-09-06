@@ -1,10 +1,9 @@
-import { tierLabel } from "@/lib/tiers";
+import { TIERS, tierLabel } from "@/lib/tiers";
 import type { Card } from "@/lib/types";
 
 /** A 1-5 pip row in ink: tiers get a rank, never a colour. */
 function Pips({ tier }: { tier: Card["tier"] }) {
-  const filled =
-    ["beginner", "intermediate", "advanced", "expert", "grandmaster"].indexOf(tier) + 1;
+  const filled = TIERS.indexOf(tier) + 1;
   return (
     <span className="inline-flex items-center gap-1" aria-hidden="true">
       {[1, 2, 3, 4, 5].map((i) => (

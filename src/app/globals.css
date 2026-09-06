@@ -57,7 +57,6 @@ body {
   display: block;
   width: 100%;
   height: 100%;
-  transition: transform 200ms ease;
 }
 
 /* Orientations are named by where EXIT sits. `bottom` matches the photo and is
@@ -83,9 +82,15 @@ html[data-orientation="top"] .tp-board svg {
   transform: rotate(270deg);
 }
 
-/* No 200ms sweep on first paint: the attribute lands after hydration. */
-html:not([data-orientation]) .tp-board svg {
-  transition: none;
+/* The 200ms sweep belongs to the Rotate tap and to nothing else.
+   `data-orientation` lands after hydration, so a reader who left the board on
+   `left` would otherwise watch it turn on every page load. `RotateControl`
+   sets `data-tp-ready` on the tap itself, which arms the transition for that
+   change and every one after it. */
+html[data-tp-ready] .tp-board svg,
+html[data-tp-ready] .tp-frame-label,
+html[data-tp-ready] .tp-exit-label {
+  transition: transform 200ms ease;
 }
 
 /* Frame letters counter-rotate about their own box, so an address stays
@@ -94,7 +99,6 @@ html:not([data-orientation]) .tp-board svg {
   transform-box: fill-box;
   transform-origin: center;
   transform: rotate(-90deg);
-  transition: transform 200ms ease;
 }
 
 html[data-orientation="right"] .tp-frame-label {
@@ -113,17 +117,12 @@ html[data-orientation="top"] .tp-frame-label {
   transform: rotate(90deg);
 }
 
-html:not([data-orientation]) .tp-frame-label {
-  transition: none;
-}
-
 /* EXIT letters run along the wall rather than across it, so they get their own
    counter-rotation: upright and horizontal wherever the gap ends up. */
 .tp-exit-label {
   transform-box: fill-box;
   transform-origin: center;
   transform: rotate(-90deg);
-  transition: transform 200ms ease;
 }
 
 html[data-orientation="right"] .tp-exit-label,
@@ -134,10 +133,6 @@ html[data-orientation="bottom"] .tp-exit-label {
 html[data-orientation="left"] .tp-exit-label,
 html[data-orientation="top"] .tp-exit-label {
   transform: rotate(90deg);
-}
-
-html:not([data-orientation]) .tp-exit-label {
-  transition: none;
 }
 
 /* `Label colours` prints B, Y and G on every piece for the blue/green
@@ -179,15 +174,32 @@ html[data-orientation="top"] .tp-piece-label {
   transition: none;
 }
 
+/* ── The deck ────────────────────────────────────────────────────────────── */
+
+/* The solved dot ships on every tile and CSS reveals it, so painting solved
+   state never re-renders the grid. The attribute lands on the tile itself,
+   which is the `<a data-card>`. A `hidden` attribute would need `!important`
+   to undo, because Tailwind's preflight sets one. */
+[data-solved-dot] {
+  display: none;
+}
+
+[data-card][data-solved="true"] [data-solved-dot] {
+  display: block;
+}
+
+/* ── Motion ──────────────────────────────────────────────────────────────── */
+
 /* The only other motion on the site. */
 .tp-fade {
   transition: opacity 150ms ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tp-board svg,
-  .tp-frame-label,
-  .tp-exit-label,
+  /* Same selectors as the armed rule above, so this wins on specificity. */
+  html[data-tp-ready] .tp-board svg,
+  html[data-tp-ready] .tp-frame-label,
+  html[data-tp-ready] .tp-exit-label,
   .tp-piece-label,
   .tp-fade {
     transition: none;

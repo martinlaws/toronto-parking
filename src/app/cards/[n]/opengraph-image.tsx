@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { notFound } from "next/navigation";
 
 import { renderBoard } from "@/lib/board-svg";
 import { cards } from "@/lib/deck";
@@ -27,9 +28,11 @@ const BOARD_PX = 560;
 
 export default async function Image({ params }: { params: Promise<{ n: string }> }) {
   const { n } = await params;
-  const index = Number(n) - 1;
-  const card =
-    /^[1-9][0-9]?$/.test(n) && index >= 0 && index < DECK_SIZE ? cards[index] : cards[0];
+  // The same miss test as the page. Falling back to card 1 here would hand a
+  // stranger a 200 poster reading `#1 · Beginner · Par 5` for `/cards/999`.
+  if (!/^[1-9][0-9]?$/.test(n) || Number(n) > DECK_SIZE) notFound();
+  const card = cards[Number(n) - 1];
+  if (!card || card.n !== Number(n)) notFound();
 
   const svg = renderBoard(card.pieces, "og", card.board);
   const src = `data:image/svg+xml;base64,${Buffer.from(svg, "utf8").toString("base64")}`;

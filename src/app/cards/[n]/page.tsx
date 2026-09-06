@@ -64,9 +64,12 @@ export default async function CardPage({ params }: PageProps<"/cards/[n]">) {
         </section>
 
         {/* 2 · The diagram, with its two controls on the bottom edge */}
+        {/* `self-start` is what makes the sticky work: the section spans both
+            rows, and a stretched grid item is already as tall as its area, so
+            a sticky offset has nowhere to travel. */}
         <section
           aria-label="Board setup"
-          className="space-y-4 wide:col-start-2 wide:row-span-2 wide:row-start-1 wide:sticky wide:top-8"
+          className="space-y-4 wide:col-start-2 wide:row-span-2 wide:row-start-1 wide:self-start wide:sticky wide:top-8"
         >
           {/* 8px gutters on a phone, so a cell lands near 48px at 360px wide. */}
           <div className="-mx-2 sm:mx-0">
@@ -111,37 +114,39 @@ export default async function CardPage({ params }: PageProps<"/cards/[n]">) {
           <section id="stuck" />
 
           {/* 7 · Prev, next, back, and where the board came from */}
-          <nav aria-label="Deck" className="space-y-3">
-            {previous ? (
-              <Link href={`/cards/${previous}` as Route} className={BAR}>
-                <span className="text-ink/60">Previous</span>
-                <span className="font-display text-xl">#{previous}</span>
+          <section className="space-y-10">
+            <nav aria-label="Deck" className="space-y-3">
+              {previous ? (
+                <Link href={`/cards/${previous}` as Route} className={BAR}>
+                  <span className="text-ink/60">Previous</span>
+                  <span className="font-display text-xl">#{previous}</span>
+                </Link>
+              ) : null}
+              {next ? (
+                <Link href={`/cards/${next}` as Route} className={BAR}>
+                  <span className="text-ink/60">Next</span>
+                  <span className="font-display text-xl">#{next} &rarr;</span>
+                </Link>
+              ) : null}
+              <Link href="/" className={`${BAR} justify-center`}>
+                Back to the deck
               </Link>
-            ) : null}
-            {next ? (
-              <Link href={`/cards/${next}` as Route} className={BAR}>
-                <span className="text-ink/60">Next</span>
-                <span className="font-display text-xl">#{next} &rarr;</span>
-              </Link>
-            ) : null}
-            <Link href="/" className={`${BAR} justify-center`}>
-              Back to the deck
-            </Link>
-          </nav>
+            </nav>
 
-          <footer className="border-t border-ink/10 pt-5 text-sm text-ink/60">
-            <p className="break-all">
-              Board{" "}
-              <a
-                className="underline underline-offset-4"
-                href={`https://www.michaelfogleman.com/static/rush/#${card.board}/${card.moves}`}
-                rel="noreferrer"
-              >
-                {card.board}
-              </a>{" "}
-              · from Fogleman&apos;s database
-            </p>
-          </footer>
+            <footer className="border-t border-ink/10 pt-5 text-sm text-ink/60">
+              <p className="break-all">
+                Board{" "}
+                <a
+                  className="underline underline-offset-4"
+                  href={`https://www.michaelfogleman.com/static/rush/#${card.board}/${card.moves}`}
+                  rel="noreferrer"
+                >
+                  {card.board}
+                </a>{" "}
+                · from Fogleman&apos;s database
+              </p>
+            </footer>
+          </section>
         </div>
       </div>
     </main>

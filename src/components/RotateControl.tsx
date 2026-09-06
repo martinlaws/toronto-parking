@@ -116,7 +116,9 @@ export default function RotateControl() {
   const wanted = useRef(false);
 
   // The stylesheet is the external system here: it reads these two attributes
-  // and nothing in React re-renders when they change.
+  // and nothing in React re-renders when they change. This write is silent by
+  // design: `data-tp-ready`, and so the transition, is set by `rotate` alone,
+  // so the first paint and another tab's `storage` write both land instantly.
   useEffect(() => {
     document.documentElement.dataset.orientation = orientation;
   }, [orientation]);
@@ -126,6 +128,11 @@ export default function RotateControl() {
   }, [labels]);
 
   const rotate = useCallback(() => {
+    // Arm the 200ms sweep here rather than in the stylesheet's base rule. The
+    // stored orientation lands after hydration, and an armed transition would
+    // turn that into a sweep on every page load for anyone who left the board
+    // anywhere but `bottom`. A tap is the one turn worth watching.
+    document.documentElement.dataset.tpReady = "";
     const current = orientationSnapshot();
     const next = ORIENTATIONS[(ORIENTATIONS.indexOf(current) + 1) % ORIENTATIONS.length];
     orientationCache = next;
