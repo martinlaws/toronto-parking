@@ -66,14 +66,67 @@ const MAX_CLUSTER = 30_000;
 const MAX_PIECES: Partial<Record<Tier, number>> = { beginner: 10 };
 const MAX_SIMILARITY = 0.5;
 
-/** tier -> slot 0..11 -> pylon count. Fixed indices, so pylon cards spread out. */
-const PYLON_SLOTS: Record<Tier, Record<string, number>> = {
-  beginner: {},
-  intermediate: { "5": 1, "10": 1 },
-  advanced: { "3": 1, "7": 1, "11": 2 },
-  expert: { "2": 1, "5": 1, "8": 1, "11": 2 },
-  grandmaster: { "1": 1, "3": 1, "5": 2, "7": 1, "9": 2, "11": 1 },
+/** tier -> [slot 0..11, pylon count], in the python dict's order. Fixed
+ *  indices, so pylon cards spread out. Ordered pairs rather than an object
+ *  because this is the one constant whose key *order* reaches the output: see
+ *  `pylonSlotsJson`. */
+const PYLON_SLOTS: Record<Tier, [number, number][]> = {
+  beginner: [],
+  intermediate: [
+    [5, 1],
+    [10, 1],
+  ],
+  advanced: [
+    [3, 1],
+    [7, 1],
+    [11, 2],
+  ],
+  expert: [
+    [2, 1],
+    [5, 1],
+    [8, 1],
+    [11, 2],
+  ],
+  grandmaster: [
+    [1, 1],
+    [3, 1],
+    [5, 2],
+    [7, 1],
+    [9, 2],
+    [11, 1],
+  ],
 };
+
+function pylonsAt(tier: Tier, slot: number): number {
+  for (const [at, count] of PYLON_SLOTS[tier]) if (at === slot) return count;
+  return 0;
+}
+
+/** `generator.pylonSlots`, serialised. The python emits its dicts in insertion
+ *  order, while `JSON.stringify` emits integer-like keys in ascending numeric
+ *  order however the object was built — `Object.fromEntries` of an ordered list
+ *  does not help, and no other object can either. So JavaScript matches the
+ *  python here only while the python's dicts are written ascending, as they are
+ *  today. A non-ascending transcription throws instead of silently moving the
+ *  digest. */
+function pylonSlotsJson(): Record<Tier, Record<string, number>> {
+  const out = {} as Record<Tier, Record<string, number>>;
+  for (const tier of TIERS) {
+    const slots: Record<string, number> = {};
+    let previous = -1;
+    for (const [slot, count] of PYLON_SLOTS[tier]) {
+      if (slot <= previous) {
+        throw new Error(
+          `PYLON_SLOTS.${tier} is not in ascending slot order, which JSON.stringify cannot emit`,
+        );
+      }
+      previous = slot;
+      slots[String(slot)] = count;
+    }
+    out[tier] = slots;
+  }
+  return out;
+}
 
 /** The database's only 60-move board, pinned as card 60. Its opening is forced,
  *  so it is the one card exempt from every filter, the branching rule included. */
@@ -320,7 +373,7 @@ function select(pool: Map<number, PoolEntry[]>): Pick[] {
 
     for (let slot = 0; slot < CARDS_PER_TIER; slot++) {
       let moves = tg[slot];
-      const pylons = PYLON_SLOTS[tier][String(slot)] ?? 0;
+      const pylons = pylonsAt(tier, slot);
       let taken: PoolEntry;
 
       if (tier === "grandmaster" && slot === CARDS_PER_TIER - 1) {
@@ -482,7 +535,7 @@ export function buildDeck(rushPath: string, log: (line: string) => void = () => 
       seed: SEED,
       deckSize: DECK_SIZE,
       bands: BANDS,
-      pylonSlots: PYLON_SLOTS,
+      pylonSlots: pylonSlotsJson(),
     },
     cards: picks.map((pick, i) => toCard(pick, i + 1)),
   };
