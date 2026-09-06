@@ -206,9 +206,9 @@ async function main(argv: string[]): Promise<void> {
   const { getRedis, prefixFor } = await import("../src/lib/store");
   const boards = await import("../src/lib/boards");
   const prefix = prefixFor(process.env.VERCEL_ENV);
-  const redis = getRedis();
 
   if (args.verb === "ls") {
+    const redis = getRedis();
     const codes = (await redis.smembers(boards.boardsKey())).map(String).sort();
     if (codes.length === 0) {
       process.stdout.write(`No boards in ${prefix}\n`);
@@ -226,6 +226,7 @@ async function main(argv: string[]): Promise<void> {
   }
 
   if (args.verb === "reset") {
+    const redis = getRedis();
     const code = boards.normalizeCode(args.codes[0]);
     if (!boards.isValidCode(code)) fail(`${args.codes[0]} is not a board code.`);
     await redis.del(boards.solvedKey(code));
@@ -234,6 +235,7 @@ async function main(argv: string[]): Promise<void> {
   }
 
   if (args.verb === "rm") {
+    const redis = getRedis();
     const code = boards.normalizeCode(args.codes[0]);
     if (!boards.isValidCode(code)) fail(`${args.codes[0]} is not a board code.`);
     await redis
@@ -257,6 +259,16 @@ async function main(argv: string[]): Promise<void> {
   const parsed = validateSeedFile(raw, { isCode: boards.isValidCode });
   if (!parsed.ok) fail(`${args.file} is not a seed file:\n  ${parsed.problems.join("\n  ")}`);
 
+  // A file git knows about can never take a code back, so that refusal comes
+  // before the store is even opened.
+  if (parsed.entries.some((entry) => entry.code === "")) {
+    const writeGuard = guardCodeWrite(args.file, isTracked(args.file));
+    if (!writeGuard.ok) fail(writeGuard.reason);
+  }
+
+  // The client is built only once the file is known good, so a missing seed
+  // file reports itself rather than a missing environment variable.
+  const redis = getRedis();
   const known = new Set((await redis.smembers(boards.boardsKey())).map(String));
   const knownGuard = guardKnownCodes(parsed.entries, known, args.yes);
   if (!knownGuard.ok) fail(knownGuard.reason);
@@ -276,8 +288,6 @@ async function main(argv: string[]): Promise<void> {
   }
 
   if (minted.length > 0) {
-    const writeGuard = guardCodeWrite(args.file, isTracked(args.file));
-    if (!writeGuard.ok) fail(writeGuard.reason);
     // The file is written before the store, so a code can never be live and unrecorded.
     writeFileSync(args.file, `${JSON.stringify(parsed.entries, null, 2)}\n`, "utf8");
   }

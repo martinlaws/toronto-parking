@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 
 import { isValidCode } from "../src/lib/code";
@@ -192,5 +194,24 @@ describe("guardKnownCodes()", () => {
 
   it("yields to an explicit --yes", () => {
     assert.equal(guardKnownCodes([entry({ code: "zzzzzz" })], known, true).ok, true);
+  });
+});
+
+describe("the store is never imported at module scope", () => {
+  it("keeps seed-boards free of static src/ imports, so --production decides the prefix", () => {
+    const source = readFileSync(join(process.cwd(), "scripts/seed-boards.ts"), "utf8");
+    const staticImports = source.match(/^import .*$/gm) ?? [];
+    for (const line of staticImports) {
+      assert.ok(
+        !line.includes("../src/"),
+        `${line} runs before VERCEL_ENV is set from the flag`,
+      );
+    }
+    assert.ok(source.includes('await import("../src/lib/store")'));
+    assert.ok(source.includes('await import("../src/lib/boards")'));
+    assert.ok(
+      source.indexOf("process.env.VERCEL_ENV =") < source.indexOf('await import("../src/lib/store")'),
+      "the assignment must come first",
+    );
   });
 });

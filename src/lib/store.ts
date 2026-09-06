@@ -21,11 +21,6 @@ export function getRedis(): Redis {
   return client;
 }
 
-/** Test seam: drops the memoised client so a test can prove nothing is cached. */
-export function resetRedis(): void {
-  client = undefined;
-}
-
 /** Pure, so both branches are testable without touching `process.env`. */
 export function prefixFor(env: string | undefined): string {
   return env === "production" ? "tp:prod:" : "tp:dev:";
