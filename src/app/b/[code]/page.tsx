@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import BoardHeader from "@/components/BoardHeader";
 import FourBoards from "@/components/FourBoards";
+import StoreDown from "@/components/StoreDown";
 import { SITE_NAME } from "@/lib/site";
 
 /**
@@ -22,15 +23,19 @@ export const metadata: Metadata = {
 export default function BoardPage({ params }: PageProps<"/b/[code]">) {
   return (
     <main>
-      <Suspense fallback={<p data-skeleton="board-header">Finding this board</p>}>
-        <BoardHeader params={params} />
-      </Suspense>
+      <StoreDown>
+        <Suspense fallback={<p data-skeleton="board-header">Finding this board</p>}>
+          <BoardHeader params={params} />
+        </Suspense>
+      </StoreDown>
 
       {/* INTEGRATION: lane B's <DeckGrid /> and this lane's <BoardProgress /> go here. */}
 
-      <Suspense fallback={<p data-skeleton="four-boards">Reading the other boards</p>}>
-        <FourBoards params={params} />
-      </Suspense>
+      <StoreDown>
+        <Suspense fallback={<p data-skeleton="four-boards">Reading the other boards</p>}>
+          <FourBoards params={params} />
+        </Suspense>
+      </StoreDown>
     </main>
   );
 }
