@@ -17,13 +17,13 @@ export default function DeckPage() {
         </p>
       </header>
 
-      <section
-        aria-labelledby="have-a-board"
-        className="mb-8 rounded-2xl border border-ink/12 bg-ground-edge/60 px-4 py-4 sm:px-6"
-      >
-        <h2 id="have-a-board" className="font-display text-lg font-bold">
-          Have a board?
-        </h2>
+      {/* No heading and no `aria-label`: the bar has two states and no name is
+          true in both. "Have a board?" repeated the first three words of the
+          field's own label a line below it, and in the remembered state it
+          asked a question the reader had already answered. Unnamed, the box is
+          a plain grouping element, and the content names itself — a labelled
+          field, or the link to the remembered board. */}
+      <section className="mb-8 rounded-2xl border border-ink/12 bg-ground-edge/60 px-4 py-4 sm:px-6">
         <RootBoardBar />
       </section>
 
