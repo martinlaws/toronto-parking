@@ -172,10 +172,20 @@ export function paintUnsolved(code: string | null, card: number): void {
   announce();
 }
 
-/** Adopts the server's list wholesale. Last write wins; there are no tombstones. */
+/**
+ * Adopts the server's list, then lays anything still waiting in the outbox back
+ * over it. A queued write is one the server has not seen, so it cannot have been
+ * contradicted: without this, adopting mid-replay takes the reader's own tick
+ * off the deck while their write is still on its way. Last write wins at the
+ * server, and there are no tombstones.
+ */
 export function adoptServerSolves(code: string, solved: { card: number; at: string }[]): void {
   const map: SolvedMap = {};
   for (const solve of solved) map[String(solve.card)] = solve.at;
+  for (const pending of getOutbox(code)) {
+    if (pending.op === "put") map[String(pending.card)] = pending.at;
+    else delete map[String(pending.card)];
+  }
   setSolved(code, map);
   announce();
 }
@@ -207,6 +217,14 @@ export function queue(code: string, op: OutboxOp): void {
   const ops = getOutbox(code).filter((pending) => pending.card !== op.card);
   ops.push(op);
   setOutbox(code, ops);
+}
+
+/** Drops every pending write for one card, whichever way it went. */
+export function dequeueCard(code: string, card: number): void {
+  setOutbox(
+    code,
+    getOutbox(code).filter((pending) => pending.card !== card),
+  );
 }
 
 export function unqueue(code: string, op: OutboxOp): void {
@@ -294,6 +312,12 @@ export async function toggleSolve(
   if (!code) return;
 
   const op: OutboxOp = { op: want ? "put" : "del", card, at };
+
+  // This tap contradicts anything still queued for the card, so that write goes
+  // now rather than on the next flush: replaying it would put back a solve the
+  // reader has just undone, on the phone and on every other board.
+  dequeueCard(code, card);
+
   if (onHold()) {
     queue(code, op);
     return;
@@ -305,8 +329,6 @@ export async function toggleSolve(
   } else if (result === "drop") {
     if (want) paintUnsolved(code, card);
     else paintSolved(code, card, at);
-    unqueue(code, op);
-    announce();
   }
 }
 
@@ -325,13 +347,32 @@ export async function pull(code: string): Promise<boolean> {
   }
 }
 
-/** On mount and on `online`: replay the outbox in order, then pull and adopt. */
-export async function flush(code: string): Promise<boolean> {
+const running = new Map<string, Promise<boolean>>();
+
+/**
+ * On mount and on `online`: replay the outbox in order, then pull and adopt.
+ * The card page and the deck page both start one, so a second call while the
+ * first is still going joins it rather than replaying the same writes twice.
+ */
+export function flush(code: string): Promise<boolean> {
+  const started = running.get(code);
+  if (started) return started;
+  const run = replay(code).finally(() => running.delete(code));
+  running.set(code, run);
+  return run;
+}
+
+async function replay(code: string): Promise<boolean> {
   if (onHold()) return false;
   for (const op of getOutbox(code)) {
     const result = await send(code, op);
     if (result === "retry") return false;
     unqueue(code, op);
+    if (result === "drop") {
+      // The server will never take this write, so the paint goes back with it.
+      if (op.op === "put") paintUnsolved(code, op.card);
+      else paintSolved(code, op.card, op.at);
+    }
   }
   return pull(code);
 }

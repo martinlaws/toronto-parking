@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
-import { flush, getBoard, nextCard, solvedCards } from "@/lib/local";
+import { getBoard, nextCard, solvedCards } from "@/lib/local";
 import { DECK_SIZE } from "@/lib/tiers";
 
 import { useMirror } from "./useMirror";
+import { useSync } from "./useSync";
 
 /**
  * Paints solved state onto the prerendered deck tiles, which carry
@@ -17,11 +18,11 @@ import { useMirror } from "./useMirror";
  */
 export default function BoardProgress({ code: given }: { code?: string }) {
   const version = useMirror();
-  const [reachable, setReachable] = useState(true);
 
   const code = version === 0 ? null : (given ?? getBoard()?.code ?? null);
   const solved = version === 0 ? [] : solvedCards(code);
   const next = version === 0 ? null : nextCard(code);
+  const reachable = useSync(code);
 
   useEffect(() => {
     if (version === 0) return;
@@ -35,22 +36,6 @@ export default function BoardProgress({ code: given }: { code?: string }) {
     // `solved` is derived from the mirror, and `version` steps on every change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version, code]);
-
-  useEffect(() => {
-    if (!code) return;
-    let live = true;
-    const sync = () => {
-      void flush(code).then((ok) => {
-        if (live) setReachable(ok);
-      });
-    };
-    sync();
-    window.addEventListener("online", sync);
-    return () => {
-      live = false;
-      window.removeEventListener("online", sync);
-    };
-  }, [code]);
 
   if (version === 0) return null;
 

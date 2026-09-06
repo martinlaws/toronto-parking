@@ -5,6 +5,7 @@ import { useState } from "react";
 import { getBoard, isSolved, toggleSolve } from "@/lib/local";
 
 import { useMirror } from "./useMirror";
+import { useSync } from "./useSync";
 
 /**
  * The one toggle: `Mark solved` → `Solved`. The mirror is painted before the
@@ -17,6 +18,9 @@ export default function SolveToggle({ card, par }: { card: number; par?: number 
   const code = version === 0 ? null : (getBoard()?.code ?? null);
   const solved = version === 0 ? false : isSolved(code, card);
   const claimed = version === 0 ? true : getBoard() !== null;
+
+  // The toggle is the one control on the card page, so the replay runs here too.
+  useSync(code);
 
   async function onToggle() {
     setBusy(true);
