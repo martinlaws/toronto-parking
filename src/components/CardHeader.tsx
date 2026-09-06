@@ -1,6 +1,8 @@
 import { TIERS, tierLabel } from "@/lib/tiers";
 import type { Card } from "@/lib/types";
 
+import SolvedChip from "./SolvedChip";
+
 /** A 1-5 pip row in ink: tiers get a rank, never a colour. */
 function Pips({ tier }: { tier: Card["tier"] }) {
   const filled = TIERS.indexOf(tier) + 1;
@@ -33,7 +35,7 @@ export default function CardHeader({ card }: { card: Card }) {
         <span className="sr-only">Card {card.n}</span>
       </h1>
       <div className="flex flex-col items-start gap-2 pb-2 sm:items-end">
-        {/* Lane C: <SolvedChip n={card.n} /> goes here, in the header. */}
+        <SolvedChip card={card.n} />
         <div className="flex items-center gap-2 text-sm">
           <Pips tier={card.tier} />
           <span className="font-medium">{tierLabel(card.tier)}</span>

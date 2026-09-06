@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 
+import BoardDeckProgress from "@/components/BoardDeckProgress";
 import BoardHeader from "@/components/BoardHeader";
+import DeckGrid from "@/components/DeckGrid";
 import FourBoards from "@/components/FourBoards";
 import StoreDown from "@/components/StoreDown";
 import { SITE_NAME } from "@/lib/site";
@@ -16,7 +18,8 @@ import { SITE_NAME } from "@/lib/site";
  * name reaches browser history, a preview card or a crawler.
  */
 export const metadata: Metadata = {
-  title: SITE_NAME,
+  // Absolute, so the layout's `%s · Toronto Parking` template does not double it.
+  title: { absolute: SITE_NAME },
   robots: { index: false, follow: false },
 };
 
@@ -29,7 +32,13 @@ export default function BoardPage({ params }: PageProps<"/b/[code]">) {
         </Suspense>
       </StoreDown>
 
-      {/* INTEGRATION: lane B's <DeckGrid /> and this lane's <BoardProgress /> go here. */}
+      {/* The code comes from the URL inside this boundary, so the deck grid and
+          the rest of the shell still prerender without the page awaiting params. */}
+      <Suspense fallback={null}>
+        <BoardDeckProgress />
+      </Suspense>
+
+      <DeckGrid />
 
       <StoreDown>
         <Suspense fallback={<p data-skeleton="four-boards">Reading the other boards</p>}>

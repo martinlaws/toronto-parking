@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import Board from "@/components/Board";
 import CardHeader from "@/components/CardHeader";
+import SolveToggle from "@/components/SolveToggle";
 import Checklist from "@/components/Checklist";
 import RotateControl from "@/components/RotateControl";
 import { setupSentences } from "@/lib/board";
@@ -104,7 +105,7 @@ export default async function CardPage({ params }: PageProps<"/cards/[n]">) {
             <h2 id="mark-solved" className="font-display text-2xl font-bold">
               Mark solved
             </h2>
-            {/* Lane C: <SolveToggle n={card.n} par={card.moves} /> goes here, as block 5. */}
+            <SolveToggle card={card.n} par={card.moves} />
             <p className="text-ink/65">
               Ticking a card keeps your place. With a board code it travels to the other three.
             </p>

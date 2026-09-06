@@ -1,6 +1,8 @@
 import Link from "next/link";
 
+import BoardProgress from "@/components/BoardProgress";
 import DeckGrid from "@/components/DeckGrid";
+import RootBoardBar from "@/components/RootBoardBar";
 import { DECK_SIZE } from "@/lib/tiers";
 
 export default function DeckPage() {
@@ -22,12 +24,12 @@ export default function DeckPage() {
         <h2 id="have-a-board" className="font-display text-lg font-bold">
           Have a board?
         </h2>
-        {/* Lane C: <RootBoardBar /> goes here — the code field, or the remembered-board chip. It replaces the line below. */}
-        <p className="mt-1 text-ink/70">Enter the code from the card in the box.</p>
+        <RootBoardBar />
       </section>
 
-      {/* Lane C: <BoardProgress /> goes here — it paints solved state onto the tiles below. */}
-      <div className="mb-10" data-board-progress />
+      <div className="mb-10" data-board-progress>
+        <BoardProgress />
+      </div>
 
       <DeckGrid />
 
