@@ -1,0 +1,47 @@
+{
+  "name": "toronto-parking",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "node --import tsx --test \"tests/**/*.test.ts\"",
+    "deck:build": "node --import tsx scripts/build-deck.ts",
+    "boards:seed": "node --env-file=.env.local --import tsx scripts/seed-boards.ts",
+    "boards:ls": "node --env-file=.env.local --import tsx scripts/seed-boards.ts --ls",
+    "boards:reset": "node --env-file=.env.local --import tsx scripts/seed-boards.ts --reset",
+    "boards:rm": "node --env-file=.env.local --import tsx scripts/seed-boards.ts --rm",
+    "qr:build": "node --import tsx scripts/make-qr.ts",
+    "icons:build": "node --import tsx scripts/make-icons.ts"
+  },
+  "dependencies": {
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.4",
+    "@vercel/analytics": "^2.0.1",
+    "next": "16.3.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.4",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.35.4",
+    "tailwindcss": "^4",
+    "tsx": "^4.23.13",
+    "typescript": "^5"
+  },
+  "packageManager": "pnpm@11.24.0"
+}
