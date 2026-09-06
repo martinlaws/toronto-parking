@@ -59,16 +59,19 @@ export default async function CardPage({ params }: PageProps<"/cards/[n]">) {
     <main className="mx-auto w-full max-w-5xl grow px-4 py-8 sm:px-6 sm:py-12">
       <div className="grid gap-8 wide:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] wide:gap-12">
         {/* 1 · Header */}
-        <div className="wide:col-start-1 wide:row-start-1">
+        <section aria-label="Card" className="wide:col-start-1 wide:row-start-1">
           <CardHeader card={card} />
-        </div>
+        </section>
 
         {/* 2 · The diagram, with its two controls on the bottom edge */}
         <section
           aria-label="Board setup"
           className="space-y-4 wide:col-start-2 wide:row-span-2 wide:row-start-1 wide:sticky wide:top-8"
         >
-          <Board card={card} />
+          {/* 8px gutters on a phone, so a cell lands near 48px at 360px wide. */}
+          <div className="-mx-2 sm:mx-0">
+            <Board card={card} />
+          </div>
           <RotateControl />
         </section>
 

@@ -15,7 +15,6 @@ export default function DeckPage() {
         </p>
       </header>
 
-      {/* Lane C: <RootBoardBar /> goes here — the code field, or the remembered-board chip. */}
       <section
         aria-labelledby="have-a-board"
         className="mb-8 rounded-2xl border border-ink/12 bg-ground-edge/60 px-4 py-4 sm:px-6"
@@ -23,9 +22,8 @@ export default function DeckPage() {
         <h2 id="have-a-board" className="font-display text-lg font-bold">
           Have a board?
         </h2>
-        <p className="mt-1 text-ink/70">
-          Enter the code from the card in the box.
-        </p>
+        {/* Lane C: <RootBoardBar /> goes here — the code field, or the remembered-board chip. It replaces the line below. */}
+        <p className="mt-1 text-ink/70">Enter the code from the card in the box.</p>
       </section>
 
       {/* Lane C: <BoardProgress /> goes here — it paints solved state onto the tiles below. */}
