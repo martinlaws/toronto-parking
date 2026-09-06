@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { CONTROL } from "@/lib/ui";
 
 /**
  * The two controls on the diagram's bottom edge, plus the colour-blind label
@@ -102,8 +103,7 @@ function wakeSupportedSnapshot(): boolean {
   return "wakeLock" in navigator;
 }
 
-const BUTTON =
-  "tp-fade inline-flex min-h-11 items-center gap-2 rounded-full border border-ink/15 px-4 py-2 text-sm font-medium hover:bg-ink/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink";
+const BUTTON = CONTROL;
 
 export default function RotateControl() {
   const orientation = useSyncExternalStore(subscribe, orientationSnapshot, serverOrientation);
