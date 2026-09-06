@@ -520,4 +520,13 @@ function invokedDirectly(): boolean {
   }
 }
 
-if (invokedDirectly()) main(process.argv.slice(2));
+if (invokedDirectly()) {
+  try {
+    main(process.argv.slice(2));
+  } catch (error) {
+    // A digest mismatch or a failed tripwire is a bad database, not a crash:
+    // say so in one line and write nothing.
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  }
+}
