@@ -300,10 +300,10 @@ describe("panelRowText()", () => {
     );
   });
 
-  it("drops the furthest cell for a board with nothing solved", () => {
+  it("keeps the four-cell shape for a board with nothing solved", () => {
     assert.equal(
       panelRowText(row({ name: "Alex" }), now),
-      `Alex · 0 of ${DECK_SIZE} · nothing yet`,
+      `Alex · no card yet · 0 of ${DECK_SIZE} · nothing yet`,
     );
   });
 });

@@ -170,15 +170,18 @@ export function relativeTime(iso: string | null, now: Date = new Date()): string
 }
 
 /**
- * `{name} · card {furthest} · {solved} of {deckSize} · {relative time}`. A board
- * with nothing solved has no furthest card, so that one cell is dropped rather
- * than printed as "card 0".
+ * `{name} · card {furthest} · {solved} of {deckSize} · {relative time}`, the
+ * spec's fixed four-cell row.
+ *
+ * A board with nothing solved keeps the shape and fills the cell with words,
+ * matching the register the time cell already uses for absence: every board
+ * starts at zero, so dropping the cell would leave all four rows three cells
+ * wide at launch and reshape them one at a time as people started solving.
+ * There is no card 0, so the number is not an option.
  */
 export function panelRowText(row: PanelRow, now: Date = new Date()): string {
-  const tail = `${row.solved} of ${DECK_SIZE} · ${relativeTime(row.lastAt, now)}`;
-  return row.furthest === 0
-    ? `${row.name} · ${tail}`
-    : `${row.name} · card ${row.furthest} · ${tail}`;
+  const furthest = row.furthest === 0 ? "no card yet" : `card ${row.furthest}`;
+  return `${row.name} · ${furthest} · ${row.solved} of ${DECK_SIZE} · ${relativeTime(row.lastAt, now)}`;
 }
 
 // ── Keys ────────────────────────────────────────────────────────────────────
