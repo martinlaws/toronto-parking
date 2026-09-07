@@ -408,9 +408,13 @@ export async function toggleSolve(
   }
 
   const result = await sendPending(code, op);
+  // A later tap for this card is on the wire or already queued: this write lost,
+  // and re-queuing it (or reverting its paint) would undo that tap.
+  const overtaken = () =>
+    inFlight.get(code)?.has(card) || getOutbox(code).some((pending) => pending.card === card);
   if (result === "retry") {
-    queue(code, op);
-  } else if (result === "drop") {
+    if (!overtaken()) queue(code, op);
+  } else if (result === "drop" && !overtaken()) {
     if (want) paintUnsolved(code, card);
     else paintSolved(code, card, at);
   }

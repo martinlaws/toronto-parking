@@ -277,6 +277,37 @@ describe("a tap that lands while a replay is running", () => {
   });
 });
 
+describe("a second tap while the first write is still open", () => {
+  it("does not re-queue the write that tap undid", async () => {
+    const put = gate("PUT 5");
+    const ticking = toggleSolve(CODE, 5, true);
+    await put.arrived;
+
+    // The reader unticks the card while its `put` is still on the wire, so the
+    // untick chains behind it rather than racing it.
+    const del = gate("DELETE 5");
+    const unticking = toggleSolve(CODE, 5, false);
+    await settled();
+    assert.deepEqual(requests, ["PUT 5"]);
+
+    // The connection drops under the open `put` and comes back for the untick.
+    failing.add(5);
+    put.release();
+    await del.arrived;
+    failing.delete(5);
+    del.release();
+    await Promise.all([ticking, unticking]);
+
+    // The failed `put` must not go back in the outbox: the untick is the
+    // reader's last word, and a replay would put card 5 back on the deck and
+    // on every other board's panel.
+    assert.deepEqual(writes, ["PUT 5", "DELETE 5"]);
+    assert.deepEqual(getOutbox(CODE), []);
+    assert.deepEqual(solvedCards(CODE), []);
+    assert.deepEqual(cardsOn(), []);
+  });
+});
+
 describe("a pull that is already open when the reader taps", () => {
   it("keeps the tap rather than painting the older list back over it", async () => {
     solved.set(7, "2026-09-01T00:00:00.000Z");
