@@ -15,8 +15,10 @@ type Props = {
  * input, which is what makes `dangerouslySetInnerHTML` safe here.
  *
  * The wrapper is a fixed square so the SVG can turn inside it without anything
- * re-laying out. Orientation is a CSS transform driven by `data-orientation`
- * on `<html>`, which `RotateControl` writes after hydration.
+ * re-laying out. The turn is a CSS transform driven by `--tp-turn` on `<html>`,
+ * a cumulative angle `RotateControl` writes after hydration so every tap moves
+ * a quarter turn forward; `data-orientation` rides alongside it and still
+ * drives the EXIT lip and the piece letters.
  */
 export default function Board({ card, mode = "card", className }: Props) {
   const svg = renderBoard(

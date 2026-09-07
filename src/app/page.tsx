@@ -28,9 +28,9 @@ export default function DeckPage() {
         <RootBoardBar />
       </div>
 
-      <div className="mb-10" data-board-progress>
-        <BoardProgress />
-      </div>
+      {/* No wrapper: the component renders its own, and a wrapper here would
+          become the sticky bar's containing block and leave it no travel. */}
+      <BoardProgress />
 
       <DeckGrid />
 

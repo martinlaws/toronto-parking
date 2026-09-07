@@ -161,11 +161,20 @@ export function guardVerb(args: Pick<Args, "verb" | "production" | "yes" | "code
  * Both facts are passed in so the guard stays pure and the tests can cover it
  * without shelling out.
  */
-export function guardCodeWrite(file: string, git: { tracked: boolean; ignored: boolean }): Guard {
+export function guardCodeWrite(
+  file: string,
+  git: { tracked: boolean; ignored: boolean | null },
+): Guard {
   if (git.tracked) {
     return {
       ok: false,
       reason: `${file} is tracked by git. Codes and names belong in ${DEFAULT_FILE}, which is not.`,
+    };
+  }
+  if (git.ignored === null) {
+    return {
+      ok: false,
+      reason: `git could not say whether ${file} is ignored, so no code was minted. Run this from a git checkout with git on PATH.`,
     };
   }
   if (!git.ignored) {
@@ -253,12 +262,24 @@ export function isTracked(file: string): boolean {
  * ignored. Anything else (no git on the box, a signal) leaves the answer
  * unknown, and an unknown answer refuses.
  */
-export function isIgnored(file: string): boolean {
+/**
+ * `true` ignored, `false` not ignored, `null` when git could not answer.
+ *
+ * Exit 128 is git refusing the question because the path is outside this
+ * worktree, so this repository's index cannot stage it and minting there is
+ * allowed. Anything else — no git on PATH, not a checkout, a broken repo — is
+ * unknown rather than safe, and the caller refuses on it with its own message
+ * rather than telling the operator their file is not gitignored.
+ */
+export function isIgnored(file: string): boolean | null {
   try {
     execFileSync("git", ["check-ignore", "-q", "--", file], { stdio: "ignore" });
     return true;
   } catch (error) {
-    return (error as { status?: unknown }).status === 128;
+    const status = (error as { status?: unknown }).status;
+    if (status === 0 || status === 1) return status === 0;
+    if (status === 128) return true;
+    return null;
   }
 }
 

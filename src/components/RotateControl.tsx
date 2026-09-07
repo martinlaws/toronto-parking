@@ -66,6 +66,11 @@ function subscribe(onChange: () => void): () => void {
   const onStorage = () => {
     orientationCache = null;
     labelsCache = null;
+    // A write from another tab reseeds the turn counter from the orientation
+    // index rather than incrementing it, so the angle can jump by any amount.
+    // Disarm the transition first or that jump animates, which is the very
+    // backwards sweep the cumulative counter exists to remove.
+    document.documentElement.removeAttribute("data-tp-ready");
     turnCache = null;
     onChange();
   };

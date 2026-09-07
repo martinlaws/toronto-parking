@@ -213,6 +213,12 @@ describe("isTracked() and isIgnored()", () => {
     });
     assert.equal(guard.ok, true);
   });
+  it("refuses when git could not answer at all, rather than blaming the file", () => {
+    const guard = guardCodeWrite("boards.throwaway.json", { tracked: false, ignored: null });
+    assert.equal(guard.ok, false);
+    assert.ok(!guard.ok && guard.reason.includes("could not say"));
+    assert.ok(!guard.ok && !guard.reason.includes("not gitignored"));
+  });
 });
 
 describe("guardKnownCodes()", () => {
