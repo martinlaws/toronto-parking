@@ -54,3 +54,8 @@ boards.throwaway.json
 # otherwise swallows this directory whole.
 !public/icons/
 !public/icons/**
+
+# claude code tooling scratch, never product source
+.claude/
+.agents/
+skills-lock.json
