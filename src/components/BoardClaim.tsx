@@ -32,10 +32,16 @@ export default function BoardClaim({
   const mine = version === 0 ? null : getBoard();
   if (!mine || mine.code === code) return null;
 
+  // Two controls sharing a line with running text: the link takes `CONTROL` as
+  // the button already had, so both clear the 44 px floor, and the paragraph
+  // becomes a wrapping flex row so a pair of 44 px targets cannot sit on top of
+  // the sentence they belong to.
   return (
-    <p data-board-claim="">
+    <p data-board-claim="" className="mt-6 flex flex-wrap items-center gap-2">
       This is {name}&apos;s board. Yours is{" "}
-      <Link href={`/b/${mine.code}`}>{mine.name}&apos;s →</Link>{" "}
+      <Link href={`/b/${mine.code}`} className={CONTROL}>
+        {mine.name}&apos;s →
+      </Link>{" "}
       <button type="button" className={CONTROL} onClick={() => setBoard({ code, n, name })}>
         Make this my board
       </button>

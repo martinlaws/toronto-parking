@@ -1,12 +1,41 @@
 "use client";
 
+import type { Route } from "next";
+import Link from "next/link";
 import { useEffect } from "react";
 
 import { getBoard, nextCard, solvedCards } from "@/lib/local";
 import { DECK_SIZE } from "@/lib/tiers";
+import { CONTROL } from "@/lib/ui";
 
 import { useMirror } from "./useMirror";
 import { useSync } from "./useSync";
+
+/**
+ * The bar the chip rides in. It is the component's own outermost element on
+ * purpose: `sticky` is bounded by its containing block, so a chip nested in a
+ * short wrapper would have nowhere to travel and would sit still. `bg-ground`
+ * and the negative gutters give it something opaque to hold, edge to edge,
+ * while the deck scrolls under it.
+ */
+export const PICK_UP_BAR =
+  "sticky top-0 z-10 -mx-4 mb-8 space-y-3 bg-ground px-4 py-3 sm:-mx-6 sm:px-6";
+
+/**
+ * The pick-up chip: the step from a board's home to the next card, and the one
+ * tap target a recipient who has just scanned the QR is looking for. Pure and
+ * exported so a test can read the href and the touch target back without a DOM.
+ *
+ * `as Route` because `typedRoutes` is on and the number is only known at run
+ * time, exactly as the deck tiles do it.
+ */
+export function PickUp({ next }: { next: number }) {
+  return (
+    <Link href={`/cards/${next}` as Route} className={CONTROL} data-pick-up={next}>
+      Pick up at #{next}
+    </Link>
+  );
+}
 
 /**
  * Paints solved state onto the prerendered deck tiles, which carry
@@ -39,9 +68,11 @@ export default function BoardProgress({ code: given }: { code?: string }) {
 
   if (version === 0) return null;
 
+  // Only the chip earns the sticky treatment. With no chip the block is a
+  // notice or two, and a notice pinned over the deck would be noise.
   return (
-    <div data-board-progress="">
-      {next !== null ? <p data-pick-up={next}>Pick up at #{next}</p> : null}
+    <div data-board-progress="" className={next !== null ? PICK_UP_BAR : "mb-8 space-y-3"}>
+      {next !== null ? <PickUp next={next} /> : null}
       {solved.length === 0 ? <p>Nothing solved yet. Card 1 is the place to start.</p> : null}
       {solved.length >= DECK_SIZE ? (
         <p>

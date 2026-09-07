@@ -23,10 +23,16 @@ export default function RootBoardBar() {
 
   const board = version === 0 ? null : getBoard();
 
+  // `CONTROL` rather than a bare link: the spec calls this a chip and a thumb
+  // has to hit it, so it takes the 44 px floor and the focus ring every other
+  // control here carries. The `<p>` stays: `inline-flex` already keeps the chip
+  // from stretching across it.
   if (board) {
     return (
       <p data-board-bar="remembered">
-        <Link href={`/b/${board.code}`}>Continue on {board.name}&apos;s board →</Link>
+        <Link href={`/b/${board.code}`} className={CONTROL}>
+          Continue on {board.name}&apos;s board →
+        </Link>
       </p>
     );
   }
