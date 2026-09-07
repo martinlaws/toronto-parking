@@ -10,6 +10,7 @@ import {
   solvedCards,
   toggleSolve,
 } from "../src/lib/local";
+import { savedOnThisPhone } from "../src/components/SolveToggle";
 
 /**
  * The client mirror, driven against a fake `localStorage` and a fake network.
@@ -428,5 +429,21 @@ describe("coming back online", () => {
     assert.deepEqual(writes, ["PUT 1", "PUT 1"]);
     assert.deepEqual(cardsOn(), [1]);
     assert.deepEqual(getOutbox(CODE), []);
+  });
+});
+
+describe("the note under the toggle", () => {
+  it("waits for a save before it says one has happened", async () => {
+    // A card page opened cold with no board claimed: nothing is saved yet, so
+    // the note would be asserting something that has not happened.
+    assert.equal(savedOnThisPhone(3), false);
+
+    await toggleSolve(null, 3, true);
+    assert.equal(savedOnThisPhone(3), true);
+
+    // Once a board carries the solve, the note has nothing left to explain.
+    setBoard({ code: CODE, n: 1, name: "Alpha" });
+    await settled();
+    assert.equal(savedOnThisPhone(3), false);
   });
 });

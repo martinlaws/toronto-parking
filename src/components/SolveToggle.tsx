@@ -7,6 +7,15 @@ import { useMirror } from "./useMirror";
 import { useSync } from "./useSync";
 
 /**
+ * True when the note under the toggle applies: a solve this phone is holding
+ * with no board to carry it to. Exported because the mirror tests can drive it
+ * against a fake `localStorage`, which the component itself has no renderer for.
+ */
+export function savedOnThisPhone(card: number): boolean {
+  return getBoard() === null && isSolved(null, card);
+}
+
+/**
  * The one toggle: `Mark solved` → `Solved`. The mirror is painted before the
  * network is asked, so the label flips on the tap and not on the round trip.
  *
@@ -22,7 +31,7 @@ export default function SolveToggle({ card, par }: { card: number; par?: number 
 
   const code = version === 0 ? null : (getBoard()?.code ?? null);
   const solved = version === 0 ? false : isSolved(code, card);
-  const claimed = version === 0 ? true : getBoard() !== null;
+  const note = version !== 0 && savedOnThisPhone(card);
 
   // The toggle is the one control on the card page, so the replay runs here too.
   useSync(code);
@@ -42,7 +51,7 @@ export default function SolveToggle({ card, par }: { card: number; par?: number 
         {solved ? "Solved" : "Mark solved"}
       </button>
       {solved && par !== undefined ? <p>Solved. Par was {par}.</p> : null}
-      {!claimed ? <p>Saved on this phone. Enter your board&apos;s code and it comes with you.</p> : null}
+      {note ? <p>Saved on this phone. Enter your board&apos;s code and it comes with you.</p> : null}
     </div>
   );
 }
