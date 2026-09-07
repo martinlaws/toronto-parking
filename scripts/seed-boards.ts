@@ -153,13 +153,28 @@ export function guardVerb(args: Pick<Args, "verb" | "production" | "yes" | "code
   return OK;
 }
 
-/** Names and codes never enter a tracked file, so a code is never written to one. */
-export function guardCodeWrite(file: string, tracked: boolean): Guard {
-  if (!tracked) return OK;
-  return {
-    ok: false,
-    reason: `${file} is tracked by git. Codes and names belong in ${DEFAULT_FILE}, which is not.`,
-  };
+/**
+ * Names and codes never enter a file that git could commit, so a code is only
+ * ever written to one git is ignoring. Untracked is not enough: a fresh
+ * `boards.json` is untracked, un-ignored, and one `git add -A` from public.
+ *
+ * Both facts are passed in so the guard stays pure and the tests can cover it
+ * without shelling out.
+ */
+export function guardCodeWrite(file: string, git: { tracked: boolean; ignored: boolean }): Guard {
+  if (git.tracked) {
+    return {
+      ok: false,
+      reason: `${file} is tracked by git. Codes and names belong in ${DEFAULT_FILE}, which is not.`,
+    };
+  }
+  if (!git.ignored) {
+    return {
+      ok: false,
+      reason: `${file} is untracked but not gitignored, so one git add -A would commit the codes and the names. They belong in ${DEFAULT_FILE}.`,
+    };
+  }
+  return OK;
 }
 
 /** A code in the file that the store has never heard of is a typo, not a board. */
@@ -173,12 +188,77 @@ export function guardKnownCodes(entries: SeedEntry[], known: Set<string>, yes: b
   };
 }
 
+/** What the store already holds, reduced to the three fields a refusal prints. */
+export type ExistingBoard = { n: number; code: string; name: string };
+
+/**
+ * An empty code mints a board, so the number it claims has to be free in the
+ * store. `validateSeedFile` only keeps `n` unique inside one file, so a lost
+ * `boards.local.json` rebuilt from the example passes every other guard and
+ * mints a second board on all four numbers, which the panel then renders twice.
+ *
+ * No separate count is needed: `n` is already 1 to `BOARD_COUNT`, so a fifth
+ * board cannot appear without repeating a number the store holds.
+ */
+export function guardNewBoards(
+  entries: SeedEntry[],
+  existing: ExistingBoard[],
+  opts: { file: string; production: boolean; yes: boolean },
+): Guard {
+  const byNumber = new Map<number, ExistingBoard[]>();
+  for (const board of existing) {
+    byNumber.set(board.n, [...(byNumber.get(board.n) ?? []), board]);
+  }
+
+  const clashes = entries.filter((entry) => entry.code === "" && byNumber.has(entry.n));
+  if (clashes.length === 0) return OK;
+
+  // A duplicate number cannot be taken back: `--rm` never runs against
+  // production, so there a --yes is not offered at all.
+  if (!opts.production && opts.yes) return OK;
+
+  const numbers = [...new Set(clashes.map((entry) => entry.n))].sort((a, b) => a - b);
+  const rows = numbers
+    .flatMap((n) => byNumber.get(n) ?? [])
+    .map((board) => `  ${board.n} · ${board.code} · ${board.name}`)
+    .join("\n");
+  const one = numbers.length === 1;
+  const head = one
+    ? `Board ${numbers[0]} is already in the boards set:`
+    : `Boards ${numbers.join(", ")} are already in the boards set:`;
+  const paste = one
+    ? `Paste that code back into ${opts.file}`
+    : `Paste those codes back into ${opts.file}`;
+  const tail = opts.production
+    ? `${paste}. An empty code mints a second board on the same number, and there is no way back: --rm never runs against production.`
+    : `${paste}, or pass --yes to mint a second board on that number anyway.`;
+
+  return { ok: false, reason: `${head}\n${rows}\n${tail}` };
+}
+
 export function isTracked(file: string): boolean {
   try {
     execFileSync("git", ["ls-files", "--error-unmatch", "--", file], { stdio: "ignore" });
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * `git check-ignore` exits 0 for an ignored path and 1 for one git would happily
+ * commit. Exit 128 is git declining the question, because the path is outside
+ * this worktree or there is no worktree at all. A path that no commit from here
+ * can carry is not the same as a path git is not ignoring, so that counts as
+ * ignored. Anything else (no git on the box, a signal) leaves the answer
+ * unknown, and an unknown answer refuses.
+ */
+export function isIgnored(file: string): boolean {
+  try {
+    execFileSync("git", ["check-ignore", "-q", "--", file], { stdio: "ignore" });
+    return true;
+  } catch (error) {
+    return (error as { status?: unknown }).status === 128;
   }
 }
 
@@ -259,10 +339,14 @@ async function main(argv: string[]): Promise<void> {
   const parsed = validateSeedFile(raw, { isCode: boards.isValidCode });
   if (!parsed.ok) fail(`${args.file} is not a seed file:\n  ${parsed.problems.join("\n  ")}`);
 
-  // A file git knows about can never take a code back, so that refusal comes
+  // A file git could commit can never take a code back, so that refusal comes
   // before the store is even opened.
-  if (parsed.entries.some((entry) => entry.code === "")) {
-    const writeGuard = guardCodeWrite(args.file, isTracked(args.file));
+  const mints = parsed.entries.some((entry) => entry.code === "");
+  if (mints) {
+    const writeGuard = guardCodeWrite(args.file, {
+      tracked: isTracked(args.file),
+      ignored: isIgnored(args.file),
+    });
     if (!writeGuard.ok) fail(writeGuard.reason);
   }
 
@@ -272,6 +356,21 @@ async function main(argv: string[]): Promise<void> {
   const known = new Set((await redis.smembers(boards.boardsKey())).map(String));
   const knownGuard = guardKnownCodes(parsed.entries, known, args.yes);
   if (!knownGuard.ok) fail(knownGuard.reason);
+
+  // Only when something would be minted, so an ordinary re-seed of four known
+  // codes still costs one SMEMBERS and nothing more.
+  if (mints) {
+    const existing: ExistingBoard[] = [];
+    for (const row of await Promise.all([...known].sort().map((code) => boards.readBoard(code)))) {
+      if (row) existing.push({ n: row.n, code: row.code, name: row.name });
+    }
+    const newGuard = guardNewBoards(parsed.entries, existing, {
+      file: args.file,
+      production: args.production,
+      yes: args.yes,
+    });
+    if (!newGuard.ok) fail(newGuard.reason);
+  }
 
   const minted: SeedEntry[] = [];
   const taken = new Set(known);
