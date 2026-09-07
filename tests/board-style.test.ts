@@ -1,0 +1,111 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
+
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
+import BoardProgress, { PICK_UP_BAR, PickUp } from "../src/components/BoardProgress";
+import SolvedChip, { Chip } from "../src/components/SolvedChip";
+import { CHIP, CONTROL } from "../src/lib/ui";
+
+/**
+ * The board page's look, held to the two things the spec fixes and a browser
+ * would otherwise be the only witness to: the pick-up line is a real link to
+ * the next card, and the solved state is a filled chip.
+ *
+ * `renderToStaticMarkup` runs no effects, so the mirror-aware wrappers render
+ * their empty first shape here; the presentational halves are exported beside
+ * them and are what these assertions read. Nothing in this file touches a
+ * store, a board code or a name.
+ */
+
+const src = (file: string) =>
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", file), "utf8");
+
+/** Every `<Link>` opening tag in a file, formatting and attribute order aside. */
+function linkTags(file: string): string[] {
+  return src(file).match(/<Link\b[\s\S]*?>/g) ?? [];
+}
+
+describe("the pick-up chip", () => {
+  it("links to the next card", () => {
+    const html = renderToStaticMarkup(createElement(PickUp, { next: 14 }));
+    assert.match(html, /^<a /);
+    assert.match(html, /href="\/cards\/14"/);
+    assert.match(html, />Pick up at #14</);
+  });
+
+  it("carries the 44 px floor and the focus ring", () => {
+    const html = renderToStaticMarkup(createElement(PickUp, { next: 14 }));
+    assert.ok(html.includes(CONTROL), "the chip is a CONTROL");
+    assert.match(CONTROL, /\bmin-h-11\b/);
+    assert.match(CONTROL, /focus-visible:outline/);
+  });
+
+  it("keeps the attribute the stylesheet and the tests hook onto", () => {
+    const html = renderToStaticMarkup(createElement(PickUp, { next: 7 }));
+    assert.match(html, /data-pick-up="7"/);
+  });
+
+  it("rides in a sticky bar with a ground behind it", () => {
+    // Bounded by its containing block, so the bar has to be the component's
+    // outermost element; a background keeps the deck from scrolling through it.
+    assert.match(PICK_UP_BAR, /\bsticky\b/);
+    assert.match(PICK_UP_BAR, /\btop-0\b/);
+    assert.match(PICK_UP_BAR, /\bbg-ground\b/);
+    assert.match(PICK_UP_BAR, /\bz-10\b/);
+  });
+
+  it("renders nothing before the mirror has spoken", () => {
+    assert.equal(renderToStaticMarkup(createElement(BoardProgress, {})), "");
+  });
+});
+
+describe("the solved chip", () => {
+  it("is a filled glow chip, not body text", () => {
+    const html = renderToStaticMarkup(createElement(Chip));
+    assert.ok(html.includes(CHIP), "the chip is a CHIP");
+    assert.match(CHIP, /\bbg-glow\b/);
+    assert.match(CHIP, /\brounded-full\b/);
+    assert.match(html, />Solved</);
+  });
+
+  it("does not borrow a control's touch target or focus ring", () => {
+    // Nothing here is tappable or focusable, so `CONTROL_ON` would size a
+    // label like a button and promise a focus state that never arrives.
+    assert.doesNotMatch(CHIP, /\bmin-h-11\b/);
+    assert.doesNotMatch(CHIP, /focus-visible/);
+  });
+
+  it("renders nothing before the mirror has spoken", () => {
+    assert.equal(renderToStaticMarkup(createElement(SolvedChip, { card: 1 })), "");
+  });
+});
+
+describe("the two remembered-board links", () => {
+  // Both are controls a thumb has to hit. They only render once `localStorage`
+  // has been read, which `renderToStaticMarkup` cannot reach, so the shape is
+  // read off the source instead of off a render.
+  for (const file of ["src/components/RootBoardBar.tsx", "src/components/BoardClaim.tsx"]) {
+    it(`${file} gives every link the control shape`, () => {
+      const tags = linkTags(file);
+      assert.ok(tags.length > 0, "there is a link to check");
+      for (const tag of tags) assert.match(tag, /className=\{CONTROL\}/);
+    });
+  }
+});
+
+describe("the board page", () => {
+  it("uses the deck's container, so the tier rows are not squeezed", () => {
+    const page = src("src/app/b/[code]/page.tsx");
+    assert.match(page, /<main className="mx-auto w-full max-w-5xl grow px-4 py-10 sm:px-6 sm:py-14">/);
+  });
+
+  it("sets the dedication in the display face at a size 360px can hold", () => {
+    const header = src("src/components/BoardHeader.tsx");
+    assert.match(header, /<h1 className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl">/);
+  });
+});
