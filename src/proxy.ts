@@ -28,7 +28,14 @@ export function proxy(request: NextRequest) {
   const known = /^[1-9][0-9]?$/.test(raw) && Number(raw) <= DECK_SIZE;
   if (known) return NextResponse.next();
 
-  return NextResponse.rewrite(new URL("/_not-found", request.nextUrl));
+  // The status has to ride on the rewrite. `next start` honours the prerendered
+  // not-found's own `initialStatus: 404`, but Vercel's CDN served that same
+  // prerender as a 200, so the rewrite alone is not enough on the platform that
+  // matters. `NextResponse.rewrite` spreads its init into the response, so this
+  // is the one place the status can be set while still rendering `not-found.tsx`.
+  return NextResponse.rewrite(new URL("/_not-found", request.nextUrl), {
+    status: 404,
+  });
 }
 
 export const config = {
