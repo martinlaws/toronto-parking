@@ -121,6 +121,10 @@ export function getBoard(): StoredBoard | null {
  * sitting until something remounts with this code, and the board being switched
  * away from keeps its pending writes for good: no page the reader is likely to
  * open next syncs a code that is no longer `tp.board`.
+ *
+ * The send chains rather than joins. A run already in flight for this code took
+ * its snapshot of the outbox before the claim queued anything, so `flush()`
+ * would hand back a pass that sends none of it.
  */
 export function setBoard(board: Omit<StoredBoard, "at"> & { at?: string }): void {
   const previous = getBoard()?.code;
@@ -135,9 +139,9 @@ export function setBoard(board: Omit<StoredBoard, "at"> & { at?: string }): void
   announce();
 
   if (previous && previous !== stored.code && getOutbox(previous).length > 0) {
-    void flush(previous);
+    void resync(previous);
   }
-  if (carried) void flush(stored.code);
+  if (carried) void resync(stored.code);
 }
 
 /** True when it carried something across, so the caller knows to send. */

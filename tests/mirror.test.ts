@@ -364,6 +364,27 @@ describe("claiming a board", () => {
     assert.deepEqual(getOutbox(CODE), []);
   });
 
+  it("sends them when a run for the new code is already in flight", async () => {
+    await toggleSolve(null, 2, true);
+    assert.deepEqual(solvedCards(null), [2]);
+
+    // The deck's replay is already past its snapshot of the outbox when the
+    // header streams in and the claim lands, so joining that run sends nothing.
+    const pulling = gate(`GET ${CODE}`);
+    const syncing = flush(CODE);
+    await pulling.arrived;
+
+    setBoard({ code: CODE, n: 1, name: "Alpha" });
+    pulling.release();
+    assert.equal(await syncing, true);
+    await settled();
+
+    assert.deepEqual(writes, ["PUT 2"]);
+    assert.deepEqual(cardsOn(), [2]);
+    assert.deepEqual(solvedCards(CODE), [2]);
+    assert.deepEqual(getOutbox(CODE), []);
+  });
+
   it("drains the board being switched away from", async () => {
     setBoard({ code: CODE, n: 1, name: "Alpha" });
     offline = true;
