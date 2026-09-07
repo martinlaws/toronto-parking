@@ -25,7 +25,9 @@ export const BANDS: Record<Tier, [number, number]> = {
   grandmaster: [41, 60],
 };
 
-/** The Toronto set, ordered by traffic misery. Ready to swap into TIER_LABELS. */
+/** The Toronto set, ordered by traffic misery. Martin chose the default ladder
+ *  on 2026-09-07, so this stays as the documented alternative: swapping it into
+ *  TIER_LABELS is the whole change, since no copy spells a tier name. */
 export const TORONTO_LABELS: Record<Tier, string> = {
   beginner: "Side Street",
   intermediate: "Bloor",
@@ -34,7 +36,8 @@ export const TORONTO_LABELS: Record<Tier, string> = {
   grandmaster: "The 401",
 };
 
-/** The one array copy reads. Nothing anywhere else spells a tier name. */
+/** The one array copy reads. Nothing anywhere else spells a tier name.
+ *  The default ladder, confirmed by Martin 2026-09-07. */
 export const TIER_LABELS: Record<Tier, string> = {
   beginner: "Beginner",
   intermediate: "Intermediate",

@@ -43,7 +43,7 @@ One Upstash database serves dev, preview and production. Every key goes through 
 
 No `output: 'export'`, no `runtime = 'edge'`, no service worker in v1, no `images` block, React Compiler off. Cache Components need the Node runtime, and so do the store and the OG image routes. Route handlers, not Server Actions, for the mirror: the client is a sync engine with an outbox and needs HTTP status codes.
 
-One `proxy.ts`, and only the one. `src/proxy.ts` rewrites `/cards/<n>` outside 1..60 to a real 404. The spec forbids a proxy, but the bundled 16.3.4 docs overrule it on both halves of the mechanism it assumed: `dynamicParams` is rejected outright under Cache Components, and a `notFound()` that runs after the shell has streamed can no longer set a status code. Since a 404 on `/cards/61` is a non-negotiable check, the proxy is what buys it. Nothing else goes in that file: no store, no deck.
+One `proxy.ts`, and only the one. `src/proxy.ts` rewrites `/cards/<n>` outside 1..60 to a real 404. The spec originally forbade a proxy and specified `dynamicParams = false` instead, but the bundled 16.3.4 docs invalidate that mechanism on both halves: `dynamicParams` is rejected outright under Cache Components, and a `notFound()` that runs after the shell has streamed can no longer set a status code. Martin confirmed the proxy on 2026-09-07 and the spec is being corrected to match. Nothing else goes in that file: no store, no deck.
 
 ## Board geometry
 
