@@ -52,11 +52,21 @@ const listeners = new Set<() => void>();
 let orientationCache: Orientation | null = null;
 let labelsCache: boolean | null = null;
 
+// Taps counted, not an angle named. The stylesheet turns the board by
+// `--tp-turn`, so `top` back to `right` is turn 4 rather than a return to 0,
+// and the board takes one more quarter turn forward instead of unwinding three
+// quarters backwards. It only ever grows within a tab; clearing it alongside
+// the other two below is what makes another tab's write land as a reset from
+// the stored orientation's index rather than as a step of this tab's own, which
+// is what keeps two open tabs on the same angle.
+let turnCache: number | null = null;
+
 function subscribe(onChange: () => void): () => void {
   listeners.add(onChange);
   const onStorage = () => {
     orientationCache = null;
     labelsCache = null;
+    turnCache = null;
     onChange();
   };
   window.addEventListener("storage", onStorage);
@@ -83,8 +93,17 @@ function labelsSnapshot(): boolean {
   return labelsCache;
 }
 
+function turnSnapshot(): number {
+  if (turnCache === null) turnCache = ORIENTATIONS.indexOf(orientationSnapshot());
+  return turnCache;
+}
+
 function serverOrientation(): Orientation {
   return DEFAULT_ORIENTATION;
+}
+
+function serverTurn(): number {
+  return ORIENTATIONS.indexOf(DEFAULT_ORIENTATION);
 }
 
 function serverFalse(): boolean {
@@ -107,6 +126,7 @@ const BUTTON = CONTROL;
 
 export default function RotateControl() {
   const orientation = useSyncExternalStore(subscribe, orientationSnapshot, serverOrientation);
+  const turn = useSyncExternalStore(subscribe, turnSnapshot, serverTurn);
   const labels = useSyncExternalStore(subscribe, labelsSnapshot, serverFalse);
   const wakeSupported = useSyncExternalStore(neverChanges, wakeSupportedSnapshot, serverFalse);
   const hydrated = useSyncExternalStore(neverChanges, serverTrue, serverFalse);
@@ -115,13 +135,18 @@ export default function RotateControl() {
   const sentinel = useRef<WakeLockSentinel | null>(null);
   const wanted = useRef(false);
 
-  // The stylesheet is the external system here: it reads these two attributes
-  // and nothing in React re-renders when they change. This write is silent by
-  // design: `data-tp-ready`, and so the transition, is set by `rotate` alone,
-  // so the first paint and another tab's `storage` write both land instantly.
+  // The stylesheet is the external system here: it reads these attributes and
+  // nothing in React re-renders when they change. The angle and the name go on
+  // together: the board and the frame letters turn by `--tp-turn`, and
+  // `data-orientation` stays for everything that reads a name, EXIT and the
+  // piece letters included. This write is silent by design: `data-tp-ready`,
+  // and so the transition, is set by `rotate` alone, so the first paint and
+  // another tab's `storage` write both land instantly.
   useEffect(() => {
-    document.documentElement.dataset.orientation = orientation;
-  }, [orientation]);
+    const root = document.documentElement;
+    root.dataset.orientation = orientation;
+    root.style.setProperty("--tp-turn", `${turn * 90}deg`);
+  }, [orientation, turn]);
 
   useEffect(() => {
     document.documentElement.dataset.labels = labels ? "on" : "off";
@@ -133,8 +158,9 @@ export default function RotateControl() {
     // turn that into a sweep on every page load for anyone who left the board
     // anywhere but `bottom`. A tap is the one turn worth watching.
     document.documentElement.dataset.tpReady = "";
-    const current = orientationSnapshot();
-    const next = ORIENTATIONS[(ORIENTATIONS.indexOf(current) + 1) % ORIENTATIONS.length];
+    const turns = turnSnapshot() + 1;
+    const next = ORIENTATIONS[turns % ORIENTATIONS.length];
+    turnCache = turns;
     orientationCache = next;
     writeStored(ORIENTATION_KEY, next);
     emit();

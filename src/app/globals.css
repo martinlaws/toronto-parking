@@ -59,27 +59,15 @@ body {
   height: 100%;
 }
 
-/* Orientations are named by where EXIT sits. `bottom` matches the photo and is
-   the default, so it is the base rule: the server cannot know what this device
-   has stored, and the un-attributed page must already look right. */
+/* Orientations are named by where EXIT sits, and `RotateControl` counts taps
+   rather than naming an angle: `--tp-turn` only ever grows, so the wrap from
+   `top` back to `right` is one more quarter turn forward instead of three
+   quarters backwards. The fallback is `bottom`, which matches the photo and is
+   the default: the server cannot know what this device has stored, and the
+   un-attributed page must already look right. `data-orientation` is still on
+   `<html>` for everything that reads a name rather than an angle. */
 .tp-board svg {
-  transform: rotate(90deg);
-}
-
-html[data-orientation="right"] .tp-board svg {
-  transform: rotate(0deg);
-}
-
-html[data-orientation="bottom"] .tp-board svg {
-  transform: rotate(90deg);
-}
-
-html[data-orientation="left"] .tp-board svg {
-  transform: rotate(180deg);
-}
-
-html[data-orientation="top"] .tp-board svg {
-  transform: rotate(270deg);
+  transform: rotate(var(--tp-turn, 90deg));
 }
 
 /* The 200ms sweep belongs to the Rotate tap and to nothing else.
@@ -88,37 +76,27 @@ html[data-orientation="top"] .tp-board svg {
    sets `data-tp-ready` on the tap itself, which arms the transition for that
    change and every one after it. */
 html[data-tp-ready] .tp-board svg,
-html[data-tp-ready] .tp-frame-label,
-html[data-tp-ready] .tp-exit-label {
+html[data-tp-ready] .tp-frame-label {
   transition: transform 200ms ease;
 }
 
 /* Frame letters counter-rotate about their own box, so an address stays
-   readable while its position turns with the board. */
+   readable while its position turns with the board. Same cumulative angle
+   negated, which is what keeps the letter still under a turning board for the
+   whole 200ms rather than only at the two ends. */
 .tp-frame-label {
   transform-box: fill-box;
   transform-origin: center;
-  transform: rotate(-90deg);
-}
-
-html[data-orientation="right"] .tp-frame-label {
-  transform: rotate(0deg);
-}
-
-html[data-orientation="bottom"] .tp-frame-label {
-  transform: rotate(-90deg);
-}
-
-html[data-orientation="left"] .tp-frame-label {
-  transform: rotate(180deg);
-}
-
-html[data-orientation="top"] .tp-frame-label {
-  transform: rotate(90deg);
+  transform: rotate(calc(-1 * var(--tp-turn, 90deg)));
 }
 
 /* EXIT letters run along the wall rather than across it, so they get their own
-   counter-rotation: upright and horizontal wherever the gap ends up. */
+   counter-rotation: upright and horizontal wherever the gap ends up. Two of the
+   four steps need a half turn here while the board turns a quarter, so these
+   four end states are not an offset from `--tp-turn` and a calc would leave
+   EXIT on its side in two orientations. They stay absolute, and the label is
+   left out of the transition above so it snaps on all four steps rather than
+   swinging 180 degrees on two of them. */
 .tp-exit-label {
   transform-box: fill-box;
   transform-origin: center;
@@ -208,7 +186,6 @@ html[data-orientation="top"] .tp-piece-label {
   /* Same selectors as the armed rule above, so this wins on specificity. */
   html[data-tp-ready] .tp-board svg,
   html[data-tp-ready] .tp-frame-label,
-  html[data-tp-ready] .tp-exit-label,
   .tp-piece-label,
   .tp-fade {
     transition: none;
