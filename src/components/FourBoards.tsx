@@ -27,14 +27,22 @@ export default async function FourBoards({
 
   return (
     <section data-panel="four-boards" aria-labelledby="furthest-along">
-      <h2 id="furthest-along">Furthest along</h2>
-      <ol>
+      {/* The same section treatment the deck's tier headings carry, so the
+          panel reads as part of the page rather than as the browser default. */}
+      <h2 id="furthest-along" className="font-display text-2xl font-bold">
+        Furthest along
+      </h2>
+      <ol className="mt-3 space-y-1.5 text-lg">
         {/* Keyed by board number, never by code. React writes a key verbatim
             into the flight payload Next inlines in this page's HTML, so a code
             here would hand every recipient the other three boards' credentials
             in view-source. `n` is a unique 1..4 the seed enforces. */}
         {rows.map((row) => (
-          <li key={row.n} data-you={row.you ? "true" : undefined}>
+          <li
+            key={row.n}
+            data-you={row.you ? "true" : undefined}
+            className={row.you ? "font-semibold" : undefined}
+          >
             {panelRowText(row, now)}
             {row.you ? " · you" : null}
           </li>

@@ -26,7 +26,7 @@ export default async function BoardHeader({
 
   if (!board) {
     return (
-      <p data-board="unknown">
+      <p data-board="unknown" className="max-w-xl text-lg text-ink/70">
         That isn&apos;t one of the four. Check the code on the card in the box and try again.
       </p>
     );
@@ -37,10 +37,18 @@ export default async function BoardHeader({
       {/* The dedication line is this page's title, so it carries the level.
           Nothing new reaches history or a preview card: the page is `noindex`
           with an absolute `<title>` of the site name, and the name was already
-          in-page text. */}
-      <h1>For {board.name}.</h1>
-      {board.dedication ? <p>{board.dedication}</p> : null}
-      <p>
+          in-page text.
+
+          `text-4xl` before `sm:`, rather than the root page's fixed `text-5xl`:
+          a seeded name runs to 40 characters, and at 360px the larger size
+          wraps this line to three or four. */}
+      <h1 className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl">
+        For {board.name}.
+      </h1>
+      {board.dedication ? (
+        <p className="mt-3 max-w-xl text-lg text-ink/70">{board.dedication}</p>
+      ) : null}
+      <p className="mt-3 max-w-xl text-lg text-ink/70">
         Board {board.n} of 4. Printed in Toronto, {PRINTED}. — Martin
       </p>
       <BoardClaim code={board.code} n={board.n} name={board.name} />
