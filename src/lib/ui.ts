@@ -14,6 +14,15 @@ export const CONTROL =
 export const CONTROL_ON =
   "tp-fade inline-flex min-h-11 items-center gap-2 rounded-full border border-glow bg-glow px-4 py-2 text-sm font-semibold text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink";
 
+/**
+ * A status chip: the same glow fill as a pressed toggle, without a control's
+ * 44 px floor or focus ring. Nothing here is tappable or focusable, so
+ * inheriting `CONTROL_ON` would size a label like a button and promise a focus
+ * state that never arrives.
+ */
+export const CHIP =
+  "tp-fade inline-flex items-center rounded-full bg-glow px-3 py-1 text-sm font-semibold text-ink";
+
 /** A single-line text field, sized to match CONTROL. `text-base` keeps iOS from
  *  zooming the page when the code field takes focus. */
 export const FIELD =
