@@ -36,8 +36,16 @@ export default function AboutPage() {
           <p>
             Four copies, printed in Toronto, one each. A 6x6 peg-and-channel board with a white frame, black asphalt, glow-green markings and translucent pieces. Each box holds four blue cars and a blue truck, four yellow cars and two yellow trucks, four green cars and a green truck, two yellow pylons, and the red car.
           </p>
-          <p className="rounded-2xl border border-ink/12 bg-ground-edge/60 px-5 py-4 text-base text-ink/70">
-            ⚠ Placeholder: the community model this print remixes is not credited yet. Its link and its author&apos;s name go here before the boxes ship.
+          <p>
+            The board and the pieces are printed from{" "}
+            <a className="underline underline-offset-4" href="https://makerworld.com/en/models/78940-rush-hour-logical-game-with-cars" rel="noreferrer">
+              Martin Kozak&apos;s model on MakerWorld
+            </a>
+            , shared under{" "}
+            <a className="underline underline-offset-4" href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="noreferrer">
+              CC BY-NC-SA 4.0
+            </a>
+            . The small edits and the colours are this set&apos;s own.
           </p>
         </Section>
 
