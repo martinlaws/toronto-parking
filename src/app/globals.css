@@ -1,10 +1,11 @@
 @import "tailwindcss";
 
-/* ⚠ Every hex below is a placeholder. Issue 1 picks the final print-derived
-   values by holding a printed piece against the phone under daylight and
-   lamplight; translucent prints read one to two steps paler than a screen
-   swatch. Keep these in step with `src/lib/theme.ts`, which is the same
-   palette written for the places that need a JavaScript string. */
+/* The seven print-derived hexes (asphalt through hero) were picked against
+   printed pieces on a phone (issue 1, 2026-09-08): asphalt, frame, glow, blue
+   and hero are final; yellow and green are provisional, one step paler like
+   the rest. Keep them in step with `src/lib/theme.ts`, the same palette
+   written for the places that need a JavaScript string, and with
+   `assets/icon.svg`; `tests/theme.test.ts` holds all three together. */
 @theme {
   --color-ground: #faf7f2;
   --color-ground-edge: #efe9e0;
