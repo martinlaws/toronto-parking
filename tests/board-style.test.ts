@@ -108,4 +108,12 @@ describe("the board page", () => {
     const header = src("src/components/BoardHeader.tsx");
     assert.match(header, /<h1 className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl">/);
   });
+
+  it("drops the greeting on a board with no dedication and titles it by number", () => {
+    const header = src("src/components/BoardHeader.tsx");
+    const bare = header.slice(header.indexOf('if (board.dedication === "")'), header.indexOf("return (", header.indexOf('if (board.dedication === "")') + 40));
+    assert.ok(bare.length > 0, "the no-dedication branch exists");
+    assert.match(bare, /<h1[^>]*>\s*Board \{board\.n\} of 4\.\s*<\/h1>/);
+    assert.doesNotMatch(bare, /For \{board\.name\}/);
+  });
 });

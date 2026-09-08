@@ -32,6 +32,23 @@ export default async function BoardHeader({
     );
   }
 
+  // A board with no dedication is the maker's own copy. It gets no greeting;
+  // the register line carries the title instead, split so the display face
+  // holds a short line and the sign-off stays body-sized.
+  if (board.dedication === "") {
+    return (
+      <header data-board={board.code}>
+        <h1 className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl">
+          Board {board.n} of 4.
+        </h1>
+        <p className="mt-3 max-w-xl text-lg text-ink/70">
+          Printed in Toronto, {PRINTED}. — Martin
+        </p>
+        <BoardClaim code={board.code} n={board.n} name={board.name} />
+      </header>
+    );
+  }
+
   return (
     <header data-board={board.code}>
       {/* The dedication line is this page's title, so it carries the level.
@@ -45,9 +62,7 @@ export default async function BoardHeader({
       <h1 className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl">
         For {board.name}.
       </h1>
-      {board.dedication ? (
-        <p className="mt-3 max-w-xl text-lg text-ink/70">{board.dedication}</p>
-      ) : null}
+      <p className="mt-3 max-w-xl text-lg text-ink/70">{board.dedication}</p>
       <p className="mt-3 max-w-xl text-lg text-ink/70">
         Board {board.n} of 4. Printed in Toronto, {PRINTED}. — Martin
       </p>
