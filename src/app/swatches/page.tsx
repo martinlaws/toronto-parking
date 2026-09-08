@@ -108,20 +108,20 @@ export default function SwatchesPage() {
               >
                 <span
                   className="flex min-h-24 flex-1 items-end p-3 font-mono text-xs"
-                  style={{ background: body, color: "#121212" }}
+                  style={{ background: body, color: "#1e1c1a" }}
                 >
                   {body}
                 </span>
                 <span
                   className="flex min-h-24 flex-1 items-end p-3 font-mono text-xs"
-                  style={{ background: edge, color: "#121212" }}
+                  style={{ background: edge, color: "#1e1c1a" }}
                 >
                   {edge} edge
                 </span>
               </button>
               <div
                 className="mt-2 flex items-center gap-3 rounded-xl p-3"
-                style={{ background: "#121212" }}
+                style={{ background: "#1e1c1a" }}
               >
                 <span className="text-xs text-white/60">on asphalt</span>
                 <span
