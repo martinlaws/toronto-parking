@@ -3,19 +3,19 @@
   <!-- Source of every icon: the red cabriolet, seen from above as it is on the
        board. Everything that matters sits inside the middle 80% (51.2 to
        460.8), so the maskable variant can crop to a circle and lose nothing.
-       ⚠ Placeholder hexes, per issue 1. -->
+       Hexes match `src/lib/theme.ts`; `tests/theme.test.ts` checks. -->
   <rect width="512" height="512" fill="#FAF7F2"/>
-  <rect x="64" y="64" width="384" height="384" rx="72" fill="#121212"/>
-  <rect x="440" y="216" width="14" height="80" rx="5" fill="#6FE39B"/>
+  <rect x="64" y="64" width="384" height="384" rx="72" fill="#1E1C1A"/>
+  <rect x="440" y="216" width="14" height="80" rx="5" fill="#84EAAC"/>
   <circle cx="160" cy="160" r="10" fill="#FFFFFF" opacity="0.55"/>
   <circle cx="352" cy="160" r="10" fill="#FFFFFF" opacity="0.55"/>
   <circle cx="160" cy="352" r="10" fill="#FFFFFF" opacity="0.55"/>
   <circle cx="352" cy="352" r="10" fill="#FFFFFF" opacity="0.55"/>
   <g>
-    <rect x="120" y="198" width="272" height="116" rx="32" fill="#F2543D" stroke="#FF9C88" stroke-width="8"/>
-    <rect x="132" y="210" width="248" height="22" rx="11" fill="#FF9C88" opacity="0.3"/>
-    <rect x="194" y="228" width="124" height="66" rx="22" fill="#121212" fill-opacity="0.82" stroke="#FF9C88" stroke-width="6"/>
-    <path d="M 214 276 A 18 18 0 0 1 250 276" fill="none" stroke="#FF9C88" stroke-width="8" stroke-linecap="round"/>
-    <path d="M 262 276 A 18 18 0 0 1 298 276" fill="none" stroke="#FF9C88" stroke-width="8" stroke-linecap="round"/>
+    <rect x="120" y="198" width="272" height="116" rx="32" fill="#F76A55" stroke="#FFB0A0" stroke-width="8"/>
+    <rect x="132" y="210" width="248" height="22" rx="11" fill="#FFB0A0" opacity="0.3"/>
+    <rect x="194" y="228" width="124" height="66" rx="22" fill="#1E1C1A" fill-opacity="0.82" stroke="#FFB0A0" stroke-width="6"/>
+    <path d="M 214 276 A 18 18 0 0 1 250 276" fill="none" stroke="#FFB0A0" stroke-width="8" stroke-linecap="round"/>
+    <path d="M 262 276 A 18 18 0 0 1 298 276" fill="none" stroke="#FFB0A0" stroke-width="8" stroke-linecap="round"/>
   </g>
 </svg>
