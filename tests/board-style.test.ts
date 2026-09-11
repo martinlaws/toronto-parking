@@ -99,14 +99,28 @@ describe("the two remembered-board links", () => {
 });
 
 describe("the board page", () => {
-  it("uses the deck's container, so the tier rows are not squeezed", () => {
+  it("takes the deck's measure and keeps the gutters off `<main>`", () => {
     const page = src("src/app/b/[code]/page.tsx");
-    assert.match(page, /<main className="mx-auto w-full max-w-5xl grow px-4 py-10 sm:px-6 sm:py-14">/);
+    const main = page.match(/<main className="[^"]*"/)?.[0] ?? "";
+    assert.ok(main.length > 0, "there is a main to read");
+    // The same cap the listing puts on itself, so a tier row reads identically
+    // on this page and on the deck. And no horizontal padding: the leaf is a
+    // full-bleed object that needs the column's edge, so the gutters live on
+    // the wrappers inside and the leaf is the one thing that bleeds back out.
+    assert.match(main, /\bmax-w-xl\b/);
+    assert.doesNotMatch(main, /(^|\s)(sm:)?px-\d/);
   });
 
-  it("sets the dedication in the display face at a size 360px can hold", () => {
+  it("sets the dedication in the serif, at a size a narrow phone can hold", () => {
     const header = src("src/components/BoardHeader.tsx");
-    assert.match(header, /<h1 className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl">/);
+    // Both branches take one class string, because a name and a bare board
+    // number are the same line saying different words. A seeded name can run
+    // to 40 characters, so the size is tied to the column rather than fixed.
+    assert.match(header, /const DISPLAY =\s*"[^"]*\bfont-serif\b[^"]*"/);
+    assert.match(header, /const DISPLAY =\s*"[^"]*clamp\([^"]*"/);
+    const tags = header.match(/<h1\b[^>]*>/g) ?? [];
+    assert.equal(tags.length, 2, "a greeting and a bare number, and nothing else");
+    for (const tag of tags) assert.match(tag, /className=\{DISPLAY\}/);
   });
 
   it("drops the greeting on a board with no dedication and titles it by number", () => {
