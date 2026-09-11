@@ -2,20 +2,41 @@ import Link from "next/link";
 
 import BoardProgress from "@/components/BoardProgress";
 import DeckGrid from "@/components/DeckGrid";
+import DeckRail from "@/components/DeckRail";
 import RootBoardBar from "@/components/RootBoardBar";
+import { PRINTED } from "@/lib/site";
 import { DECK_SIZE } from "@/lib/tiers";
 
 export default function DeckPage() {
   return (
-    <main className="mx-auto w-full max-w-5xl grow px-4 py-10 sm:px-6 sm:py-14">
-      <header className="mb-10">
-        <h1 className="font-display text-5xl font-extrabold tracking-tight sm:text-6xl">
-          Toronto Parking
+    <main className="mx-auto w-full max-w-xl grow px-4 pt-5 pb-8 sm:px-6">
+      <header>
+        {/* The month comes from the constant every board page's dedication
+            takes it from, so the edition is stated once rather than in two
+            places that drift a print run apart. */}
+        <p className="tp-kicker">An edition of four · {PRINTED}</p>
+        <h1 className="tp-masthead mt-2.5">
+          Toronto
+          <br />
+          Parking
         </h1>
-        <p className="mt-3 max-w-xl text-lg text-ink/70">
-          Sixty numbered layouts to set up on the board. Pick one, place the pieces, then put the phone down and play.
+        <p className="tp-lede mt-3.5">
+          Sixty numbered layouts to set up on the board. Pick one, place the pieces, then put the
+          phone down and play.
         </p>
       </header>
+
+      <div className="mt-[19px]">
+        <DeckRail />
+      </div>
+
+      {/* Under the rail rather than under the deck, because it answers the
+          question the rail has just raised, and because forty of the sixty
+          results are a ruled blank on a first visit: a reader should be told
+          what one of those is before scrolling into thirty of them. */}
+      <p className="tp-note mt-3">
+        A ringed figure is a card solved at par. A rule is a card still waiting for a number.
+      </p>
 
       {/* No heading and no `aria-label`: the bar has two states and no name is
           true in both. "Have a board?" repeated the first three words of the
@@ -24,7 +45,7 @@ export default function DeckPage() {
           a plain grouping element, and the content names itself — a labelled
           field, or the link to the remembered board. A `div` rather than an
           unnamed `section`, so the markup claims only what it is. */}
-      <div className="mb-8 rounded-2xl border border-ink/12 bg-ground-edge/60 px-4 py-4 sm:px-6">
+      <div className="mt-4 border-t border-rule pt-3.5">
         <RootBoardBar />
       </div>
 
@@ -32,15 +53,16 @@ export default function DeckPage() {
           become the sticky bar's containing block and leave it no travel. */}
       <BoardProgress />
 
-      <DeckGrid />
+      <DeckGrid className="mt-[22px]" />
 
-      <footer className="mt-16 border-t border-ink/10 pt-6 text-sm text-ink/60">
-        <p>
-          {DECK_SIZE} cards, ordered easiest to hardest.{" "}
-          <Link href="/about" className="underline underline-offset-4">
-            About this set
-          </Link>
-        </p>
+      <footer className="tp-deck-foot mt-5">
+        <p>{DECK_SIZE} cards, ordered easiest to hardest.</p>
+        <Link
+          href="/about"
+          className="tp-link focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+        >
+          <span>About this set</span>
+        </Link>
       </footer>
     </main>
   );

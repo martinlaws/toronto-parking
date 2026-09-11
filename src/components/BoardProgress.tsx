@@ -4,7 +4,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useEffect } from "react";
 
-import { getBoard, nextCard, solvedCards } from "@/lib/local";
+import { entryMoves, getBoard, getSolved, nextCard, solvedCards } from "@/lib/local";
 import { DECK_SIZE } from "@/lib/tiers";
 import { CONTROL } from "@/lib/ui";
 
@@ -38,9 +38,15 @@ export function PickUp({ next }: { next: number }) {
 }
 
 /**
- * Paints solved state onto the prerendered deck tiles, which carry
+ * Paints solved state onto the prerendered deck entries, which carry
  * `data-card="<n>"`, and renders the sticky pick-up line. The grid itself stays
- * static: this only adds a `data-solved` attribute the stylesheet reads.
+ * static: this only adds the two attributes the stylesheet and `DeckScore`
+ * read, `data-solved` and `data-yours`.
+ *
+ * It is the only component on the deck page that touches `localStorage`, which
+ * is why the move count is painted here rather than read again downstream: one
+ * reader of the mirror, one resolution of which board is being looked at, and
+ * everything after it is derived from the markup.
  *
  * `code` is passed on a board page. Everywhere else it falls back to the
  * remembered board, and to the anonymous mirror when there is none.
@@ -55,12 +61,21 @@ export default function BoardProgress({ code: given }: { code?: string }) {
 
   useEffect(() => {
     if (version === 0) return;
+    const mirror = getSolved(code);
     const marked = new Set(solved);
     for (const tile of document.querySelectorAll<HTMLElement>("[data-card]")) {
       const n = Number(tile.dataset.card);
       if (!Number.isInteger(n)) continue;
       if (marked.has(n)) tile.dataset.solved = "true";
       else delete tile.dataset.solved;
+      // Separate attributes because they are separate facts: a card is ticked
+      // the moment it is solved and counted whenever the reader gets round to
+      // typing a number, and a solve with no count against it must not read as
+      // a solve in zero moves. Absent means absent, which is what the ruled
+      // blank in the result column says.
+      const moves = entryMoves(mirror[String(n)]);
+      if (moves === null) delete tile.dataset.yours;
+      else tile.dataset.yours = String(moves);
     }
     // `solved` is derived from the mirror, and `version` steps on every change.
     // eslint-disable-next-line react-hooks/exhaustive-deps

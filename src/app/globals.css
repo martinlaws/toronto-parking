@@ -224,36 +224,647 @@ html[data-orientation="top"] .tp-piece-label {
   transform: rotate(90deg);
 }
 
-/* Deck thumbnails never turn and never carry letters. */
+/* A thumbnail is a fixed picture of a layout, not a board you are working on:
+   it holds the shipped orientation whatever the reader has rotated their own
+   board to, and it carries no frame letters or EXIT word to counter-rotate.
+   A literal quarter turn rather than `var(--tp-turn)` is what makes that true —
+   the same angle the card page starts at, so a plate on the deck and the board
+   on the card read as the same object. */
 .tp-thumb svg {
   display: block;
   width: 100%;
   height: 100%;
-  transform: none;
+  transform: rotate(90deg);
   transition: none;
 }
 
 /* ── The deck ────────────────────────────────────────────────────────────── */
 
-/* The solved dot ships on every tile and CSS reveals it, so painting solved
-   state never re-renders the grid. The attribute lands on the tile itself,
-   which is the `<a data-card>`. A `hidden` attribute would need `!important`
-   to undo, because Tailwind's preflight sets one. */
-[data-solved-dot],
-[data-solved-mark] {
+/* The deck is a scorecard, and a scorecard is columns. Every part of a row but
+   one has a fixed width, and the one that does not is the leader, which takes
+   whatever slack is left. That is what holds par and your own number in line
+   down sixty rows and across five tiers at any measure, without a table and
+   without a single shared width having to be guessed at.
+
+   Nothing below re-renders. The grid is a Server Component; `BoardProgress`
+   writes `data-solved` and `data-yours` onto the prerendered links, the painter
+   writes `data-at-par` and the figures, and these rules turn those attributes
+   into the three states a reader is meant to tell apart at scanning speed. */
+
+/* The dot leader, which is the connective tissue of the whole listing. A drawn
+   gradient rather than a run of periods: a character leader breaks on the
+   font's own rhythm, cannot be made to stop a fixed distance from what it
+   joins, and pushes sixty rows of filler into the accessibility tree.
+   `--tp-leader-drop` sets it against the line it belongs to, since a leader
+   between figures sits at mid-height and one under a label sits near the
+   baseline; `--tp-leader-ink` is the one thing a solved row changes about it. */
+.tp-leader {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 8px;
+  align-self: stretch;
+}
+
+.tp-leader::before {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: var(--tp-leader-drop, 0.6em);
+  left: 4px;
+  height: 2px;
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    var(--tp-leader-ink, var(--color-rule-strong)) 0.8px,
+    transparent 1px
+  );
+  background-repeat: repeat-x;
+  background-size: 5px 2px;
+}
+
+/* Two columns and the hairline between them, above 360px. Below it there is
+   one, and that is arithmetic rather than taste: an entry's fixed parts come
+   to 138px and the leader needs 8 of its own, so two columns and their 22px
+   gutter want 314px of content and a 320px phone has 288. The plate is what
+   would have to give, and it cannot — a layout you cannot recognise is not
+   worth 58px of row. Stacking the two halves keeps every column in line and
+   costs a longer scroll, which is the cheap side of that trade. */
+.tp-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  column-gap: 22px;
+}
+
+/* The second copy of the column key belongs to the column that is not there. */
+.tp-key-row > :nth-child(2) {
   display: none;
 }
 
-[data-card][data-solved="true"] [data-solved-dot] {
-  display: block;
+@media (min-width: 360px) {
+  .tp-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* The rule stops 5px short of the bottom so it reads as a column divider
+     rather than as the side of a box. */
+  .tp-grid::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 5px;
+    left: calc(50% - 0.5px);
+    width: 1px;
+    background: var(--color-rule);
+  }
+
+  .tp-key-row::before {
+    display: none;
+  }
+
+  .tp-key-row > :nth-child(2) {
+    display: flex;
+  }
 }
 
-/* The dot's text equivalent rides the same attribute, so a screen reader and a
-   sighted reader learn the same thing at the same moment and `BoardProgress`
-   still writes one attribute and nothing else. `.sr-only` sets no `display` of
-   its own, which is what leaves this pair in charge of the reveal. */
+.tp-key {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  line-height: 1;
+  text-transform: uppercase;
+  --tp-leader-drop: 8px;
+}
+
+.tp-key-card {
+  color: var(--color-muted);
+  letter-spacing: 0.16em;
+}
+
+.tp-key-par {
+  flex: 0 0 21px;
+  width: 21px;
+  color: var(--color-ink);
+  text-align: right;
+  letter-spacing: 0.04em;
+}
+
+.tp-key-score {
+  flex: 0 0 24px;
+  width: 24px;
+  margin-left: 6px;
+  color: var(--color-ink);
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
+/* One card, one line: plate, number, leader, par, result. 62px is the row —
+   tall enough to give the 58px plate a hair of air, short enough that a tier
+   is a screenful. */
+.tp-entry {
+  display: flex;
+  align-items: center;
+  height: 62px;
+  --tp-leader-drop: calc(50% - 2px);
+}
+
+/* The band colour was the comparison harness's, and the harness is gone. A
+   scanline is what it is for now: a row of a sixty-row list needs something
+   under the thumb, and every other control on this site is a rule and a label,
+   which leaves nothing to borrow. Hover only, because a fill that followed
+   focus would fight the outline. */
+@media (hover: hover) {
+  .tp-entry:hover {
+    border-radius: 2px;
+    background: var(--color-ground-edge);
+  }
+}
+
+/* Big enough to recognise a layout by, which is the whole reason the deck is a
+   list of boards rather than a list of numbers. The frame ground fills the
+   corners the diagram's own rounded frame leaves. */
+.tp-entry-plate {
+  flex: 0 0 58px;
+  width: 58px;
+  aspect-ratio: 1 / 1;
+  margin-right: 8px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--color-frame);
+}
+
+.tp-entry-n {
+  flex: 0 0 21px;
+  width: 21px;
+  color: var(--color-ink);
+  font-size: 16.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.012em;
+  line-height: 1;
+  text-align: right;
+}
+
+.tp-entry-par {
+  flex: 0 0 21px;
+  width: 21px;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums lining-nums;
+  line-height: 1;
+  text-align: right;
+}
+
+/* The result, and the only round thing in the design. It is a fixed 24px box
+   in all three states, so a ring appearing never moves the column. */
+.tp-entry-score {
+  position: relative;
+  display: flex;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: 6px;
+  border-radius: 50%;
+  color: var(--color-ink);
+  font-size: 12.5px;
+  font-variation-settings: "wdth" 96;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+/* State one: solved. The number and the leader carry it, not the result slot,
+   so a card that is ticked but not yet counted still reads as done. */
+[data-card][data-solved="true"] .tp-entry-n {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+[data-card][data-solved="true"] .tp-leader {
+  --tp-leader-ink: var(--color-accent-soft);
+}
+
+/* State two: no number yet. The forty of these are the design problem, and a
+   short rule is the answer — it reads as a form waiting to be filled in, which
+   is what it is, where an empty circle would read as data that failed to load.
+   Keyed on the count and not on the solve, so it means exactly what the legend
+   says it means: a card still waiting for a number, whether that is a card
+   nobody has opened or a solve nobody has counted. */
+[data-card]:not([data-yours]) .tp-entry-score::after {
+  content: "";
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  width: 16px;
+  height: 1.5px;
+  border-radius: 1px;
+  background: var(--color-blank);
+  transform: translateX(-50%);
+}
+
+/* State three: at par. An inset shadow and not a border, so the ring draws
+   inside the box the other two states already occupy. */
+[data-card][data-at-par] .tp-entry-score {
+  box-shadow: inset 0 0 0 1.4px var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* Every visual state above has a word riding the same attribute, so a screen
+   reader and a sighted reader learn the same thing at the same moment and the
+   ring is never the only carrier of "at par". `.sr-only` sets no `display` of
+   its own, which is what leaves these rules in charge of the reveal. The link
+   reads "1, solved, par 5, your moves 5, at par", or "10, par 11, not counted
+   yet" before anyone has played it. */
+[data-solved-mark],
+[data-at-par-mark] {
+  display: none;
+}
+
 [data-card][data-solved="true"] [data-solved-mark] {
   display: inline;
+}
+
+[data-card][data-at-par] [data-at-par-mark] {
+  display: inline;
+}
+
+[data-card][data-yours] [data-uncounted-mark] {
+  display: none;
+}
+
+[data-card]:not([data-yours]) [data-yours-label] {
+  display: none;
+}
+
+/* ── The tier head ───────────────────────────────────────────────────────── */
+
+/* Five things on one line, and the tally pushed to the far end. It wraps for
+   the same reason the contents head does: the longest tier name and the widest
+   band together outrun a 320px phone, and a tally on its own line under the
+   name is better than a name clipped. */
+.tp-tier-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1.5px solid var(--color-ink);
+}
+
+.tp-tier-range {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+/* The one place a tier is a colour rather than a rank. It is not the card's
+   colour and never could be — the pieces on a board are whatever the layout
+   needs — so the swatch is the fixed palette used as a ladder, running from
+   the calmest piece in the box to the asphalt itself. The fill is a `bg-*`
+   utility from `DeckGrid`, not a variable handed in through `style`: Tailwind
+   emits a theme colour's custom property only where it can see the token used,
+   and an inline `var(--color-car-blue)` is invisible to it, so seven swatches
+   would come out transparent in a real build. The hairline keeps the pale end
+   off a near-white ground. */
+.tp-tier-swatch {
+  position: relative;
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 1.5px;
+  box-shadow: 0 0 0 0.5px rgb(19 23 20 / 0.18);
+}
+
+/* The last rung is the only compound mark: the exit lip's glow in the middle
+   of the asphalt, which is the one pairing on the board that means "out". */
+.tp-tier-swatch[data-core]::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 1px;
+  background: var(--color-glow);
+}
+
+.tp-tier-name {
+  color: var(--color-ink);
+  font-size: 13px;
+  font-variation-settings: "wdth" 84;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tp-tier-band {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* `10 of 12`, three sizes in one line: the count is the message, the total is
+   context, and the joining word is the quietest thing on the row. */
+.tp-tally {
+  margin-left: auto;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.tp-tally b {
+  color: var(--color-accent);
+  font-size: 13.5px;
+  font-weight: 720;
+}
+
+/* A zero is the whole message on a tier nobody has started, so it takes the
+   secondary grey rather than the blank grey the ruled marks use: at 1.7:1 a
+   number that means something cannot be read. */
+.tp-tally b[data-zero],
+.tp-rail-keys b[data-zero] {
+  color: var(--color-muted);
+}
+
+.tp-tally i {
+  padding: 0 4px;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-style: normal;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* ── The contents head ───────────────────────────────────────────────────── */
+
+/* It wraps rather than squeezing: the head is a title and an aside, and on a
+   narrow phone the aside taking its own line reads better than the title
+   breaking across two. */
+.tp-contents-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 7px;
+  border-bottom: 2px solid var(--color-ink);
+}
+
+.tp-contents-head h2 {
+  color: var(--color-ink);
+  font-size: 13px;
+  font-variation-settings: "wdth" 108;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tp-contents-note {
+  margin-left: auto;
+  color: var(--color-muted);
+  font-family: var(--font-serif);
+  font-size: 12.5px;
+  font-style: italic;
+  font-variation-settings: "opsz" 12;
+  text-align: right;
+}
+
+/* ── The progress rail ───────────────────────────────────────────────────── */
+
+/* Sixty ticks in five groups of twelve over the two figures that say where you
+   are. The ticks are the only place the whole deck is visible at once, which
+   is what makes a gap in the middle of a group legible as a card you skipped. */
+.tp-railblock {
+  padding-top: 12px;
+  border-top: 2px solid var(--color-ink);
+}
+
+.tp-rail-labels {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.tp-rail-figures {
+  display: flex;
+  align-items: baseline;
+  margin-top: 6px;
+  --tp-leader-drop: 6px;
+}
+
+.tp-rail-solved {
+  color: var(--color-muted);
+  font-size: 14px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: 0.005em;
+  white-space: nowrap;
+}
+
+.tp-rail-solved b {
+  padding-right: 1px;
+  color: var(--color-accent);
+  font-size: 30px;
+  font-variation-settings: "wdth" 104;
+  font-weight: 720;
+  letter-spacing: -0.025em;
+}
+
+.tp-rail-solved i {
+  padding: 0 5px 0 4px;
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-style: normal;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.tp-rail-diff {
+  display: flex;
+  align-items: flex-end;
+  color: var(--color-ink);
+  font-size: 24px;
+  font-variation-settings: "wdth" 104;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+/* With nothing counted the figure is a rule and not a zero, because `+0` would
+   claim you had matched par sixty times. Same idiom as an entry with no number
+   against it, one step wider. */
+.tp-rail-void {
+  display: block;
+  width: 26px;
+  height: 1.5px;
+  margin-bottom: 5px;
+  border-radius: 1px;
+  background: var(--color-blank);
+}
+
+.tp-rail-diff:not([data-empty]) .tp-rail-void {
+  display: none;
+}
+
+.tp-rail {
+  display: flex;
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.tp-rail-group {
+  display: flex;
+  flex: 1 1 0;
+  gap: 1.6px;
+}
+
+/* The unfilled tick is its own pair of greys rather than the near neighbours
+   in the palette: sixty of them at `accent-pale` read as a green band across
+   the page instead of as sixty things waiting to be filled. */
+.tp-rail-tick {
+  flex: 1 1 0;
+  height: 17px;
+  border-radius: 1px;
+  background: var(--color-rail-off);
+  box-shadow: inset 0 0 0 0.7px var(--color-rail-off-ring);
+}
+
+.tp-rail-tick[data-on] {
+  background: var(--color-accent);
+  box-shadow: none;
+}
+
+/* One key per group, so the rail answers where you stalled as well as how far
+   you got. Each sits under its own twelve and takes the group's width. */
+.tp-rail-keys {
+  display: flex;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.tp-rail-keys li {
+  display: flex;
+  flex: 1 1 0;
+  align-items: baseline;
+  gap: 6px;
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
+}
+
+.tp-rail-keys em {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-style: normal;
+  letter-spacing: 0.1em;
+}
+
+.tp-rail-keys b {
+  color: var(--color-accent);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+/* ── The deck page's own type ────────────────────────────────────────────── */
+
+.tp-kicker {
+  color: var(--color-muted);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.24em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.tp-masthead {
+  color: var(--color-ink);
+  font-size: 39px;
+  font-variation-settings: "wdth" 118;
+  font-weight: 640;
+  letter-spacing: -0.032em;
+  line-height: 0.92;
+}
+
+.tp-lede {
+  max-width: 20em;
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  font-size: 16.5px;
+  font-variation-settings: "opsz" 18;
+  letter-spacing: -0.005em;
+  line-height: 1.36;
+  text-wrap: pretty;
+}
+
+.tp-note {
+  color: var(--color-muted);
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  font-variation-settings: "opsz" 13;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+/* The foot of the deck: what the set is, and the way out of it. The 2px ink
+   rule closes the listing the same weight the contents head opened it. */
+.tp-deck-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 12px;
+  border-top: 2px solid var(--color-ink);
+}
+
+.tp-deck-foot p {
+  color: var(--color-muted);
+  font-size: 13px;
+  letter-spacing: -0.002em;
+}
+
+/* A link, as against a control. The design's underline weights are vocabulary
+   and 2px is the half of it `ui.ts` does not cover: 2.5px is something you
+   operate, 2px is somewhere you go. The rule sits on an inner span so it hugs
+   the label rather than the 44px box the thumb needs. */
+.tp-link {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 44px;
+  color: var(--color-ink);
+  font-size: 10px;
+  font-variation-settings: "wdth" 96;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tp-link > span {
+  padding-bottom: 3px;
+  border-bottom: 2px solid var(--color-accent);
 }
 
 /* ── Motion ──────────────────────────────────────────────────────────────── */
