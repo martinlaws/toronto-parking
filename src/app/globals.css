@@ -1,16 +1,54 @@
 @import "tailwindcss";
 
-/* The seven print-derived hexes (asphalt through hero) were picked against
+/* Two palettes live in this block and they answer to different authorities.
+   The seven print-derived hexes (asphalt through hero) were picked against
    printed pieces on a phone (issue 1, 2026-09-08): asphalt, frame, glow, blue
    and hero are final; yellow and green are provisional, one step paler like
-   the rest. Keep them in step with `src/lib/theme.ts`, the same palette
-   written for the places that need a JavaScript string, and with
-   `assets/icon.svg`; `tests/theme.test.ts` holds all three together. */
+   the rest. They match plastic, so they do not move for a redesign.
+
+   The page palette is the other one, and it is a sheet of paper for those
+   pieces to sit on: a near-white ground a hair cool of neutral, ink and body
+   grey to match, a short scale of greys for rules and unplayed marks, and one
+   green accent. The accent carries every meaning the site has, which is
+   solved, at par, a live value and a thing you operate. It exists because
+   `glow` cannot: at 1.4:1 on this ground `glow` is a fill behind ink and never
+   type or a lone mark, while the accent is 6.3:1 and can be both.
+
+   `ground`, `ground-edge`, `ink`, `ink-edge`, `accent` and `accent-pale` are
+   also strings in `src/lib/theme.ts`, because the manifest and the two Open
+   Graph routes need them in JavaScript. The greys below are not: nothing
+   outside a stylesheet has ever wanted a hairline colour, and a key in
+   `COLOURS` is a token to keep in step forever. Keep whichever half you touch
+   in step with `src/lib/theme.ts` and `assets/icon.svg`; `tests/theme.test.ts`
+   holds all three together. */
 @theme {
-  --color-ground: #faf7f2;
-  --color-ground-edge: #efe9e0;
-  --color-ink: #14110e;
-  --color-ink-edge: #3c3630;
+  --color-ground: #fafbf8;
+  --color-ground-edge: #edf1ee;
+  --color-ink: #131714;
+  --color-ink-edge: #3a423d;
+  --color-accent: #0f6b4b;
+  --color-accent-pale: #e7f1ec;
+
+  /* Stylesheet-only, and ordered light to dark rather than alphabetically,
+     because the order is the hierarchy: an ordinary hairline, the heavier one
+     that closes a table, the mark that stands for a card nobody has played
+     yet, and the secondary text grey. `accent-soft` is the dot leader on a row
+     that has been solved — the accent stated quietly enough to run the width
+     of a column sixty times. */
+  --color-rule: #e1e6e2;
+  --color-rule-strong: #c6cfc9;
+  --color-blank: #b9c6be;
+  --color-muted: #6a736d;
+  --color-accent-soft: #b3d0c2;
+
+  /* The progress rail's unfilled tick, and the 0.7px ring inside it. Both sit
+     a hair off `accent-pale` and `rule-strong` on purpose: sixty ticks at the
+     paler value read as a green band across the page rather than as sixty
+     things waiting to be filled. Substituting the near neighbours loses the
+     effect, which is why they are tokens and not literals. */
+  --color-rail-off: #eff4f1;
+  --color-rail-off-ring: #bccac2;
+
   --color-asphalt: #1e1c1a;
   --color-asphalt-edge: #3a3734;
   --color-frame: #f4f1ec;
@@ -26,8 +64,16 @@
   --color-hero: #f76a55;
   --color-hero-edge: #ffb0a0;
 
-  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  /* Three faces, each with a job it never leaves: Archivo is structure, every
+     heading and figure and uppercase label and the running text besides;
+     Newsreader is a person speaking, so ledes, captions, notes and the
+     dedication; DM Mono is machine strings, so par figures, board
+     coordinates, the code. There is no separate display face any more —
+     Archivo at `wdth 118` is the masthead and Archivo at `wdth 100` is the
+     paragraph under it, and one family doing both is the point. */
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-newsreader), Georgia, "Times New Roman", serif;
+  --font-mono: var(--font-dm-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* The card page goes two-column with a sticky board here. */
   --breakpoint-wide: 900px;
@@ -35,12 +81,46 @@
 
 html {
   background: var(--color-ground);
-  color: var(--color-ink);
+  color: var(--color-ink-edge);
   -webkit-text-size-adjust: 100%;
+
+  /* Newsreader is asked for a real italic and Archivo for weights up to 720.
+     With synthesis on, a fallback face that has neither gets slanted and
+     smeared to imitate them, and the page looks like the fonts nearly loaded.
+     Off, a face that did not arrive looks like a face that did not arrive,
+     which is the honest failure and the one worth designing against. */
+  font-synthesis: none;
 }
 
 body {
   font-family: var(--font-sans);
+}
+
+/* Preflight resets a form control's font, colour, radius and background, but
+   leaves `appearance` alone, so iOS still draws its own inset shadow inside a
+   text field and its own bevel on a button. Every control on this site is a
+   rule and a label rather than a box, and native chrome under one reads as a
+   box that failed to render. The cost is that a checkbox loses its tick along
+   with everything else, so any checkbox here has to draw its own box and its
+   own mark — which the design does anyway, in ink and accent rather than in
+   whatever blue the browser picked. */
+button,
+input {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* ── Type ────────────────────────────────────────────────────────────────── */
+
+/* The design's shared label shape: uppercase Archivo, tracked out and pulled
+   narrow. Width is the expressive axis here, and it runs the opposite way to
+   size: the more tracked-out and uppercase a run is, the narrower it gets. It
+   can only be reached through `font-variation-settings`, which Tailwind has no
+   utility for. Naming only `wdth` leaves the weight in
+   `font-weight`'s hands, so `font-bold` still bites; naming `wght` here too
+   would silently win over every weight utility on the element. */
+.tp-label {
+  font-variation-settings: "wdth" 96;
 }
 
 /* ── The board ───────────────────────────────────────────────────────────── */

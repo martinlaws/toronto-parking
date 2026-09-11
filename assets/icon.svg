@@ -4,7 +4,7 @@
        board. Everything that matters sits inside the middle 80% (51.2 to
        460.8), so the maskable variant can crop to a circle and lose nothing.
        Hexes match `src/lib/theme.ts`; `tests/theme.test.ts` checks. -->
-  <rect width="512" height="512" fill="#FAF7F2"/>
+  <rect width="512" height="512" fill="#FAFBF8"/>
   <rect x="64" y="64" width="384" height="384" rx="72" fill="#1E1C1A"/>
   <rect x="440" y="216" width="14" height="80" rx="5" fill="#84EAAC"/>
   <circle cx="160" cy="160" r="10" fill="#FFFFFF" opacity="0.55"/>

@@ -8,12 +8,23 @@
  * yellow and green pieces get the same check. Keep this file, the `@theme`
  * block in `src/app/globals.css` and `assets/icon.svg` in step: they are the
  * same palette written three times, and `tests/theme.test.ts` holds them to it.
+ *
+ * The page half is not print-derived and answers to a different question: what
+ * a sheet of paper the pieces are photographed against should be. It is a
+ * near-white ground a hair cool of neutral, so the seven saturated plastics
+ * stay the only colour on the page, and one green accent at 6.3:1 on that
+ * ground. The accent exists for two reasons. `glow` cannot do this job: at
+ * 1.4:1 on the ground it is a fill behind ink and never type or a lone mark.
+ * And solved, at par and a live value all want to be the same colour as each
+ * other and a different colour from everything else.
  */
 export const COLOURS = {
-  ground: "#FAF7F2",
-  groundEdge: "#EFE9E0",
-  ink: "#14110E",
-  inkEdge: "#3C3630",
+  ground: "#FAFBF8",
+  groundEdge: "#EDF1EE",
+  ink: "#131714",
+  inkEdge: "#3A423D",
+  accent: "#0F6B4B",
+  accentPale: "#E7F1EC",
   asphalt: "#1E1C1A",
   asphaltEdge: "#3A3734",
   frame: "#F4F1EC",
