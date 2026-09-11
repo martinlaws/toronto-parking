@@ -127,26 +127,94 @@ function truckArt(b: Box, skin: Skin, detail: boolean): string {
 }
 
 /**
- * The hero: a cabriolet with the roof off. The open cockpit and its two seat
- * arcs are the shape a red/green-blind reader picks it out by, so they stay in
- * every mode that draws detail.
+ * The hero: a cabriolet with the roof off, drawn as the printed piece actually
+ * moulds it. Front is to the right, toward the exit, and the cockpit is a
+ * shallow tub set BEHIND centre — short boot behind it, long bonnet ahead — so
+ * the piece is asymmetric along its length. A well centred on the box with a
+ * pair of arcs in it reads as a face, which is the shape this replaces.
+ *
+ * The open cockpit is the tell a red/green-blind reader picks the hero out by,
+ * so it survives with hue removed and at 58px: no other piece has a dark
+ * interior at all. At `thumb` the tub deepens and everything inside it goes,
+ * for the reason the rest of the file drops sub-pixel detail.
  */
+const WELL_BACK = 0.24;
+const WELL_FRONT = 0.575;
+/** Half-height of the tub at the bulkhead and at the screen: it tapers forward. */
+const WELL_REAR_H = 27;
+const WELL_FRONT_H = 24;
+const WELL_R = 9;
+
+/** The tub outline, as one closed path with quadratic fillets at the corners. */
+function cockpitPath(b: Box): string {
+  const ax = b.x + b.w * WELL_BACK;
+  const bx = b.x + b.w * WELL_FRONT;
+  const hr = WELL_REAR_H;
+  const hf = WELL_FRONT_H;
+  const r = WELL_R;
+  return (
+    `M ${n(ax + r)} ${n(b.cy - hr)}` +
+    ` L ${n(bx - r)} ${n(b.cy - hf)}` +
+    ` Q ${n(bx)} ${n(b.cy - hf)} ${n(bx)} ${n(b.cy - hf + r)}` +
+    ` L ${n(bx)} ${n(b.cy + hf - r)}` +
+    ` Q ${n(bx)} ${n(b.cy + hf)} ${n(bx - r)} ${n(b.cy + hf)}` +
+    ` L ${n(ax + r)} ${n(b.cy + hr)}` +
+    ` Q ${n(ax)} ${n(b.cy + hr)} ${n(ax)} ${n(b.cy + hr - r)}` +
+    ` L ${n(ax)} ${n(b.cy - hr + r)}` +
+    ` Q ${n(ax)} ${n(b.cy - hr)} ${n(ax + r)} ${n(b.cy - hr)} Z`
+  );
+}
+
 function heroArt(b: Box, detail: boolean): string {
   const skin = SKINS.red;
   let out = shell(b, skin, detail);
-  const cw = b.w * 0.46;
-  const ch = b.h - 30;
-  const cxL = b.cx - cw / 2;
-  const cyT = b.cy - ch / 2;
-  out += `<rect x="${n(cxL)}" y="${n(cyT)}" width="${n(cw)}" height="${n(ch)}" rx="16" fill="${COLOURS.asphalt}" fill-opacity="0.72"/>`;
-  out += `<rect x="${n(cxL)}" y="${n(cyT)}" width="${n(cw)}" height="${n(ch)}" rx="16" fill="none" stroke="${skin.edge}" stroke-width="2.5"/>`;
-  const r = ch * 0.3;
-  for (const seat of [b.cx - cw * 0.22, b.cx + cw * 0.22]) {
-    out += `<path d="M ${n(seat - r)} ${n(b.cy + r * 0.7)} A ${n(r)} ${n(r)} 0 0 1 ${n(seat + r)} ${n(b.cy + r * 0.7)}" fill="none" stroke="${skin.edge}" stroke-width="4" stroke-linecap="round"/>`;
-  }
+
+  const ax = b.x + b.w * WELL_BACK;
+  const bx = b.x + b.w * WELL_FRONT;
+  const well = cockpitPath(b);
+
+  // A tint, not a hole. 0.72 asphalt printed a black rectangle; this is the
+  // dusky rose a shallow recess makes in a pale translucent piece. The thumb
+  // takes it deeper because at 58px the tub is five pixels across and the only
+  // thing left to carry the tell is its value.
+  out += `<path d="${well}" fill="${COLOURS.asphalt}" fill-opacity="${detail ? 0.32 : 0.66}"/>`;
+
   if (detail) {
-    out += `<rect x="${n(b.x + 10)}" y="${n(b.y + 8)}" width="${n(b.w - 20)}" height="7" rx="3.5" fill="${skin.edge}" opacity="${HIGHLIGHT_OPACITY}"/>`;
+    // Near wall in shadow, far wall catching the light: the pair of them is
+    // what says recess rather than cut-out.
+    out += `<path d="M ${n(ax + WELL_R + 3)} ${n(b.cy - WELL_REAR_H + 4)} L ${n(bx - WELL_R - 3)} ${n(b.cy - WELL_FRONT_H + 4)}" fill="none" stroke="${COLOURS.asphalt}" stroke-width="7" stroke-opacity="0.38" stroke-linecap="round"/>`;
+    out += `<path d="M ${n(ax + WELL_R + 3)} ${n(b.cy + WELL_REAR_H - 4)} L ${n(bx - WELL_R - 3)} ${n(b.cy + WELL_FRONT_H - 4)}" fill="none" stroke="${skin.body}" stroke-width="5" stroke-opacity="0.55" stroke-linecap="round"/>`;
   }
+  out += `<path d="${well}" fill="none" stroke="${skin.edge}" stroke-width="2.5"/>`;
+
+  if (detail) {
+    // Two seat backs across the car, not two arcs along it. Side by side on the
+    // short axis they are a cockpit; side by side on the long axis they were
+    // eyes.
+    for (const sy of [b.cy - 12.5, b.cy + 12.5]) {
+      out += `<rect x="${n(ax + 8)}" y="${n(sy - 9)}" width="17" height="18" rx="5.5" fill="${skin.body}" fill-opacity="0.88" stroke="${skin.edge}" stroke-width="2"/>`;
+    }
+    // The wheel sits in front of one seat only. It is the asymmetry that a real
+    // interior has, and it costs eight units.
+    out += `<ellipse cx="${n(ax + 36)}" cy="${n(b.cy + 12.5)}" rx="7.5" ry="6.5" fill="none" stroke="${skin.edge}" stroke-width="3"/>`;
+    out += `<circle cx="${n(ax + 36)}" cy="${n(b.cy + 12.5)}" r="2" fill="${skin.edge}"/>`;
+    // Bonnet shut line, bowed forward: the long end is empty without it, and the
+    // printed piece has the same seam.
+    const cut = b.x + b.w - 36;
+    out += `<path d="M ${n(cut - 5)} ${n(b.cy - 23)} Q ${n(cut + 4)} ${n(b.cy)} ${n(cut - 5)} ${n(b.cy + 23)}" fill="none" stroke="${skin.edge}" stroke-width="2.5" opacity="0.32" stroke-linecap="round"/>`;
+    // Headlamps, so the long end reads as the bonnet.
+    for (const ly of [b.cy - 19, b.cy + 19]) {
+      out += `<rect x="${n(b.x + b.w - 21)}" y="${n(ly - 4)}" width="9" height="8" rx="4" fill="${skin.edge}" fill-opacity="0.35"/>`;
+    }
+  }
+
+  // The windscreen: a blade astride the front of the opening, bowed forward and
+  // no taller than the tub it closes. It throws a shadow back into the well —
+  // that sliver is most of what says the screen stands proud of the floor.
+  const sx = bx - 3;
+  out += `<path d="M ${n(sx - 7)} ${n(b.cy - 21)} Q ${n(sx + 1)} ${n(b.cy)} ${n(sx - 7)} ${n(b.cy + 21)} L ${n(sx - 12)} ${n(b.cy + 20)} Q ${n(sx - 4)} ${n(b.cy)} ${n(sx - 12)} ${n(b.cy - 20)} Z" fill="${COLOURS.asphalt}" fill-opacity="0.22"/>`;
+  out += `<path d="M ${n(sx)} ${n(b.cy - 22)} Q ${n(sx + 6)} ${n(b.cy)} ${n(sx)} ${n(b.cy + 22)} L ${n(sx - 7)} ${n(b.cy + 21)} Q ${n(sx - 1)} ${n(b.cy)} ${n(sx - 7)} ${n(b.cy - 21)} Z" fill="${skin.body}" fill-opacity="0.95" stroke="${skin.edge}" stroke-width="2" stroke-linejoin="round"/>`;
+
   return out;
 }
 
