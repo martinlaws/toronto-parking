@@ -36,8 +36,16 @@ export default function BoardClaim({
   // the button already had, so both clear the 44 px floor, and the paragraph
   // becomes a wrapping flex row so a pair of 44 px targets cannot sit on top of
   // the sentence they belong to.
+  //
+  // It renders on the page ground under the leaf rather than on the paper. The
+  // question is about the phone rather than about the board, and the foot of
+  // the leaf is where the hand-drawn number lives, which is the one part of it
+  // a block of text cannot have.
   return (
-    <p data-board-claim="" className="mt-6 flex flex-wrap items-center gap-2">
+    <p
+      data-board-claim=""
+      className="mt-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] tracking-[-0.002em] text-muted"
+    >
       This is {name}&apos;s board. Yours is{" "}
       <Link href={`/b/${mine.code}`} className={CONTROL}>
         {mine.name}&apos;s →

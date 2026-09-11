@@ -6,8 +6,10 @@ import {
   CODE_ALPHABET,
   CODE_LENGTH,
   isValidCode,
+  MAX_MOVES,
   normalizeCode,
   parseCard,
+  parseMoves,
   pickUpAt,
 } from "./code";
 import { getRedis, k } from "./store";
@@ -28,8 +30,10 @@ export {
   CODE_ALPHABET,
   CODE_LENGTH,
   isValidCode,
+  MAX_MOVES,
   normalizeCode,
   parseCard,
+  parseMoves,
   pickUpAt,
 };
 
@@ -61,9 +65,28 @@ export function resolveAt(raw: unknown, now: Date = new Date()): AtResult {
   return { ok: true, at: ms > now.getTime() ? now.toISOString() : when.toISOString() };
 }
 
+// ── The number of moves it took ─────────────────────────────────────────────
+
+export type MovesResult = { ok: true; moves: number | null } | { ok: false };
+
+/**
+ * The count a reader types against par. Null is not zero: it means the write
+ * carries no count and whatever is stored stays, which is what lets a plain tick
+ * and a replayed tick both leave an earlier number alone.
+ *
+ * Absence therefore cannot be an error, so an emptied field records nothing
+ * rather than clearing anything. Removing a count is a different write and does
+ * not exist yet; a `0` sentinel for it would be indistinguishable from a bug.
+ */
+export function resolveMoves(raw: unknown): MovesResult {
+  if (raw === undefined || raw === null || raw === "") return { ok: true, moves: null };
+  const moves = parseMoves(raw);
+  return moves === null ? { ok: false } : { ok: true, moves };
+}
+
 // ── Shapes ──────────────────────────────────────────────────────────────────
 
-export type Solve = { card: number; at: string };
+export type Solve = { card: number; at: string; moves?: number };
 
 export type Board = {
   code: string;
@@ -93,19 +116,50 @@ function text(value: unknown, fallback = ""): string {
   return value === undefined || value === null ? fallback : String(value);
 }
 
-/** The hash is `<card>` → ISO. Fields that are not card numbers are ignored. */
+/**
+ * The count lives in a second field rather than packed into the value beside the
+ * moment, because the two want opposite write policies: the moment is `HSETNX`
+ * and never moves, the count is `HSET` and is a thing a person corrects. One
+ * string can only have one policy.
+ *
+ * Keeping them apart is also what makes the change invisible in both directions.
+ * `parseCard` rejects `m:31`, so a reader that predates the count skips the
+ * field the way it already skips every other non-card one, and a reader that
+ * expects it finds none in a hash that has never had one.
+ */
+const MOVES_PREFIX = "m:";
+
+export const movesField = (card: number) => `${MOVES_PREFIX}${card}`;
+
+/**
+ * The hash is `<card>` → ISO, plus `m:<card>` → count. Fields that are neither
+ * are ignored, and a count is read in a second pass because hash fields arrive
+ * in no particular order: on one pass `m:31` could be read before card 31.
+ *
+ * A count with no solve beside it is an orphan and is dropped rather than
+ * inventing a solve, so `summarise().count` cannot be inflated by one. A count
+ * that does not parse is dropped rather than surfaced as `NaN`.
+ */
 export function solvesFromHash(hash: RawHash): Solve[] {
   if (!hash) return [];
-  const out: Solve[] = [];
+  const byCard = new Map<number, Solve>();
   for (const [field, value] of Object.entries(hash)) {
     const card = parseCard(field);
     if (card === null) continue;
     const at = text(value);
     if (at === "") continue;
-    out.push({ card, at });
+    byCard.set(card, { card, at });
   }
-  out.sort((a, b) => a.card - b.card);
-  return out;
+  for (const [field, value] of Object.entries(hash)) {
+    if (!field.startsWith(MOVES_PREFIX)) continue;
+    const card = parseCard(field.slice(MOVES_PREFIX.length));
+    if (card === null) continue;
+    const solve = byCard.get(card);
+    if (!solve) continue;
+    const moves = parseMoves(text(value));
+    if (moves !== null) solve.moves = moves;
+  }
+  return [...byCard.values()].sort((a, b) => a.card - b.card);
 }
 
 export function boardFromHash(code: string, hash: RawHash): Board | null {
@@ -243,20 +297,39 @@ export async function boardExists(code: string): Promise<boolean> {
   return (await getRedis().exists(boardKey(code))) > 0;
 }
 
-/** `HSETNX` keeps the first value, so a replay never moves an earlier solve. */
-export async function markSolved(code: string, card: number, at: string): Promise<Solve[]> {
-  const [, hash] = await getRedis()
-    .pipeline()
-    .hsetnx(solvedKey(code), String(card), at)
-    .hgetall<Record<string, unknown>>(solvedKey(code))
-    .exec();
-  return solvesFromHash(hash);
+/**
+ * `HSETNX` keeps the first value, so a replay never moves an earlier solve. The
+ * count is the opposite and is written with `HSET`: a reader who miscounts and
+ * types again means the second number, and a stale replay of the first one
+ * cannot arrive after it because the outbox holds one write per card.
+ *
+ * A null count writes nothing at all, which is what makes the whole `PUT`
+ * idempotent: replaying a tick made before anyone typed a number leaves the
+ * number that was typed afterwards alone.
+ */
+export async function markSolved(
+  code: string,
+  card: number,
+  at: string,
+  moves: number | null = null,
+): Promise<Solve[]> {
+  const key = solvedKey(code);
+  const pipeline = getRedis().pipeline();
+  pipeline.hsetnx(key, String(card), at);
+  if (moves !== null) pipeline.hset(key, { [movesField(card)]: String(moves) });
+  pipeline.hgetall<Record<string, unknown>>(key);
+  // The read is taken from the end rather than a fixed index: the conditional
+  // write in the middle is what decides whether it sits at 1 or at 2.
+  const results = (await pipeline.exec()) as RawHash[];
+  return solvesFromHash(results[results.length - 1] ?? null);
 }
 
+/** Both fields go, or an untick would leave a count to reattach itself to the
+ *  next solve of the same card. */
 export async function unmarkSolved(code: string, card: number): Promise<Solve[]> {
   const [, hash] = await getRedis()
     .pipeline()
-    .hdel(solvedKey(code), String(card))
+    .hdel(solvedKey(code), String(card), movesField(card))
     .hgetall<Record<string, unknown>>(solvedKey(code))
     .exec();
   return solvesFromHash(hash);

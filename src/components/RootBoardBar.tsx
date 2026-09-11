@@ -40,7 +40,7 @@ export default function RootBoardBar() {
   return (
     <form
       data-board-bar="empty"
-      className="flex flex-col gap-3"
+      className="flex flex-col"
       onSubmit={(event) => {
         event.preventDefault();
         const code = normalizeCode(typed);
@@ -48,8 +48,13 @@ export default function RootBoardBar() {
         router.push(`/b/${code}`);
       }}
     >
-      <label htmlFor="board-code">Have a board? Enter the code from the card in the box.</label>
-      <div className="flex flex-wrap items-center gap-2">
+      <label htmlFor="board-code" className="text-[13.5px]/[1.45] tracking-[-0.002em]">
+        Have a board? Enter the code from the card in the box.
+      </label>
+      {/* `items-stretch`, so the field's rule and Open's rule land on the same
+          line whichever of the two is taller. They are a pair: a baseline you
+          fill in, and the thing you operate beside it. */}
+      <div className="mt-1.5 flex items-stretch gap-3.5">
         <input
           id="board-code"
           name="code"
@@ -61,6 +66,10 @@ export default function RootBoardBar() {
           spellCheck={false}
           inputMode="text"
           maxLength={12}
+          // Six middots rather than a word: the placeholder is showing the
+          // shape of what goes in, and any word there would be read as a value
+          // already typed in a field whose own label is a sentence away.
+          placeholder="······"
           className={`${FIELD} min-w-0 flex-1`}
         />
         <button type="submit" className={`${CONTROL} shrink-0`}>

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { CONTROL } from "@/lib/ui";
 
 /**
  * The two controls on the diagram's bottom edge, plus the colour-blind label
@@ -127,7 +126,24 @@ function wakeSupportedSnapshot(): boolean {
   return "wakeLock" in navigator;
 }
 
-const BUTTON = CONTROL;
+/**
+ * One ruled table rather than three pills, and the shape it takes is the score
+ * row's further down the page: 1.5px of ink over the head, a hairline between
+ * the cells, the lighter rule closing the foot. A control that names its own
+ * current value is worth more than a control that only names itself — the board
+ * is right there, but where the exit is and whether the screen is being held
+ * awake are both things the board cannot say.
+ *
+ * The cell is 56px, comfortably over the 44px floor, and the label wraps rather
+ * than running out of its cell: `Label colours` set at 9.5px and tracked out is
+ * wider than a third of a 320px phone.
+ */
+const CELL =
+  "tp-fade flex min-h-14 flex-1 flex-col items-center justify-center gap-1.5 px-0.5 py-2 text-center focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ink";
+const CELL_TAP = `${CELL} hover:bg-ground-edge`;
+const CELL_LABEL =
+  "text-[9.5px] tracking-[0.13em] text-ink uppercase [font-variation-settings:'wdth'_88,'wght'_650]";
+const CELL_VALUE = "font-mono text-[10px] leading-none tracking-[0.06em] text-accent";
 
 export default function RotateControl() {
   const orientation = useSyncExternalStore(subscribe, orientationSnapshot, serverOrientation);
@@ -231,40 +247,63 @@ export default function RotateControl() {
   }, [acquire]);
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-3">
-      <button
-        type="button"
-        onClick={rotate}
-        className={BUTTON}
-        aria-label={`Rotate the board. The exit is at the ${orientation}.`}
-      >
-        <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 12a9 9 0 1 1-2.6-6.4" />
-          <path d="M21 3v5h-5" />
-        </svg>
-        Rotate
-      </button>
-
-      <button type="button" onClick={toggleLabels} className={BUTTON} aria-pressed={labels}>
-        <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M3 8.5V4h4.5L20 16.5 16.5 20 4 7.5Z" />
-          <circle cx="7" cy="7" r="1.2" />
-        </svg>
-        Label colours
-      </button>
-
-      {wakeSupported ? (
-        <button type="button" onClick={toggleAwake} className={BUTTON} aria-pressed={awake}>
-          <svg viewBox="0 0 24 24" className="size-4" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="4" />
-            <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" />
-          </svg>
-          {awake ? "Screen staying on" : "Keep awake"}
+    <div>
+      <div className="flex border-t-[1.5px] border-t-ink border-b border-b-rule-strong">
+        {/* The value names where the exit is and not an angle. The control
+            counts taps and `--tp-turn` only ever grows, so after four taps the
+            angle is 360 and after five it is 450; the orientation is the thing
+            that is true, and it is the same word the button's own label says. */}
+        <button
+          type="button"
+          onClick={rotate}
+          className={CELL_TAP}
+          aria-label={`Rotate the board. The exit is at the ${orientation}.`}
+        >
+          <span className={CELL_LABEL}>Rotate</span>
+          <span className={CELL_VALUE}>exit {orientation}</span>
         </button>
-      ) : null}
 
-      {/* The line replaces the button rather than sitting beside a dead one. */}
-      <p className="w-full text-center text-sm text-ink/60" hidden={!hydrated || wakeSupported}>
+        <button
+          type="button"
+          onClick={toggleLabels}
+          className={`${CELL_TAP} border-l border-l-rule`}
+          aria-pressed={labels}
+        >
+          <span className={CELL_LABEL}>Label colours</span>
+          <span className={CELL_VALUE}>{labels ? "on" : "off"}</span>
+        </button>
+
+        {/* The third cell stays whatever the browser can do, because a table
+            that loses a cell after hydration reshapes the two beside it. Until
+            `hydrated` says otherwise it is the button, which is the common
+            case and what the prerendered HTML should hold; a browser without a
+            screen lock turns it into a plain cell and the line below explains
+            itself. The wake lock has no duration to report — it lives for the
+            page load and is asked for again on `visibilitychange` — so the
+            value is on or off and nothing else. */}
+        {hydrated && !wakeSupported ? (
+          <p className={`${CELL} border-l border-l-rule`}>
+            <span className={CELL_LABEL}>Keep awake</span>
+            <span className={`${CELL_VALUE} text-muted`}>unavailable</span>
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={toggleAwake}
+            className={`${CELL_TAP} border-l border-l-rule`}
+            aria-pressed={awake}
+          >
+            <span className={CELL_LABEL}>Keep awake</span>
+            <span className={CELL_VALUE}>{awake ? "on" : "off"}</span>
+          </button>
+        )}
+      </div>
+
+      {/* The line explains the dead cell rather than sitting beside a live one. */}
+      <p
+        className="mt-2 font-serif text-[13px] text-muted [font-variation-settings:'opsz'_13]"
+        hidden={!hydrated || wakeSupported}
+      >
         This browser can&apos;t hold the screen on. Turn your auto-lock up for a bit.
       </p>
     </div>

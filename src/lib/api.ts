@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { clientIp, getRatelimit, retryAfterSeconds } from "./boards";
 
 /**
- * The three shapes every board route answers with, and the rate-limit gate.
+ * The shapes every board route answers with, and the rate-limit gate.
  * Every response carries `Cache-Control: no-store`: the client is a sync engine
  * reading status codes, and a cached 404 would strand a board.
  */
@@ -26,6 +26,8 @@ export const badCard = () => json({ error: "bad_card" }, 400);
 
 export const badAt = () => json({ error: "bad_at" }, 400);
 
+export const badMoves = () => json({ error: "bad_moves" }, 400);
+
 /**
  * 60 requests a minute by client IP. Returns the 429 when the window is spent
  * and null otherwise. Reading the request headers is also what tells Cache
@@ -40,23 +42,28 @@ export async function rateLimited(request: NextRequest): Promise<Response | null
   });
 }
 
-/** An `at` the route can act on, or the body that could not be read at all. */
-export type AtField = { ok: true; at: unknown } | { ok: false };
+/** The fields the route can act on, or the body that could not be read at all. */
+export type SolveFields = { ok: true; at: unknown; moves: unknown } | { ok: false };
 
 /**
- * `{at}` off a request body that may be absent, empty or not JSON at all. The
- * three cases are kept apart: no body means the server times the solve, a body
- * that will not parse is a `bad_at` rather than a silent server timestamp, and
- * a parsed body without an `at` is the absent case again.
+ * `{at, moves}` off a request body that may be absent, empty or not JSON at all.
+ * The three cases are kept apart: no body means the server times the solve and
+ * records no count, a body that will not parse is a `bad_at` rather than a
+ * silent server timestamp, and a parsed body missing either field is the absent
+ * case for that field alone.
+ *
+ * Both fields come back from the one call because a request body can only be
+ * read once. A second reader beside this one would find the stream consumed and
+ * answer as though the field had never been sent.
  */
-export async function readAt(request: NextRequest): Promise<AtField> {
+export async function readSolve(request: NextRequest): Promise<SolveFields> {
   let raw: string;
   try {
     raw = await request.text();
   } catch {
     return { ok: false };
   }
-  if (raw.trim() === "") return { ok: true, at: undefined };
+  if (raw.trim() === "") return { ok: true, at: undefined, moves: undefined };
 
   let body: unknown;
   try {
@@ -64,8 +71,9 @@ export async function readAt(request: NextRequest): Promise<AtField> {
   } catch {
     return { ok: false };
   }
-  if (body && typeof body === "object" && "at" in body) {
-    return { ok: true, at: (body as { at: unknown }).at };
+  if (body && typeof body === "object") {
+    const fields = body as { at?: unknown; moves?: unknown };
+    return { ok: true, at: fields.at, moves: fields.moves };
   }
-  return { ok: true, at: undefined };
+  return { ok: true, at: undefined, moves: undefined };
 }

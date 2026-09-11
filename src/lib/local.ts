@@ -6,16 +6,48 @@ import { pickUpAt } from "./code";
  * a lost mirror costs one refresh, never a crash.
  *
  * `tp.board`          `{code, n, name, at}`
- * `tp.solved.<code>`  `{<card>: ISO}` mirror of the server hash
+ * `tp.solved.<code>`  `{<card>: {at, moves?}}` mirror of the server hash
  * `tp.solved.local`   solves made before a board was claimed
- * `tp.outbox.<code>`  `[{op, card, at}]` writes waiting on the network
+ * `tp.outbox.<code>`  `[{op, card, at, moves?}]` writes waiting on the network
  */
 
 export type StoredBoard = { code: string; n: number; name: string; at: string };
 
-export type SolvedMap = Record<string, string>;
+export type Solved = { at: string; moves?: number };
 
-export type OutboxOp = { op: "put" | "del"; card: number; at: string };
+/**
+ * A bare string is the shape this mirror had before a solve could carry a move
+ * count, and every phone that has ever ticked a card still holds one. It is read
+ * through `entryAt` and `entryMoves` forever rather than rewritten: a migration
+ * pass would have a half-written state, and this union has none.
+ *
+ * A claimed board normalises itself the first time `adoptServerSolves` runs. The
+ * anonymous map never pulls from a server, so for that one the union is not a
+ * migration window but the permanent shape.
+ */
+export type SolvedEntry = string | Solved;
+
+export type SolvedMap = Record<string, SolvedEntry>;
+
+export type OutboxOp = { op: "put" | "del"; card: number; at: string; moves?: number };
+
+/** The moment a card was solved, whichever shape the entry is in. */
+export function entryAt(entry: SolvedEntry | undefined): string | null {
+  if (typeof entry === "string") return entry;
+  return entry && typeof entry.at === "string" ? entry.at : null;
+}
+
+/** The count, or null for a solve made before there was one or without one. */
+export function entryMoves(entry: SolvedEntry | undefined): number | null {
+  if (!entry || typeof entry === "string") return null;
+  return typeof entry.moves === "number" ? entry.moves : null;
+}
+
+/** The four places that build an entry need the same ternary between them: a
+ *  null count leaves the key off rather than writing it empty. */
+function entryFor(at: string, moves: number | null): Solved {
+  return moves === null ? { at } : { at, moves };
+}
 
 export const BOARD_KEY = "tp.board";
 export const LOCAL_SOLVED_KEY = "tp.solved.local";
@@ -80,9 +112,23 @@ function isBoard(value: unknown): value is StoredBoard {
   return typeof v.code === "string" && typeof v.name === "string";
 }
 
+/**
+ * The widest of the guards, and the one with the most to lose. Every phone that
+ * has solved a card holds the old bare-string shape, and a guard that took only
+ * the new one would reject the whole map rather than the entry: `getSolved`
+ * would answer `{}`, every tick would vanish off the deck at once, and for an
+ * anonymous map no server pull would ever put them back.
+ */
+function isSolvedEntry(value: unknown): value is SolvedEntry {
+  if (typeof value === "string") return true;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.at === "string" && (v.moves === undefined || typeof v.moves === "number");
+}
+
 function isSolvedMap(value: unknown): value is SolvedMap {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  return Object.values(value as Record<string, unknown>).every((v) => typeof v === "string");
+  return Object.values(value as Record<string, unknown>).every(isSolvedEntry);
 }
 
 function isOutbox(value: unknown): value is OutboxOp[] {
@@ -94,7 +140,8 @@ function isOutbox(value: unknown): value is OutboxOp[] {
       return (
         (e.op === "put" || e.op === "del") &&
         typeof e.card === "number" &&
-        typeof e.at === "string"
+        typeof e.at === "string" &&
+        (e.moves === undefined || typeof e.moves === "number")
       );
     })
   );
@@ -150,10 +197,16 @@ export function adoptLocalSolves(code: string): boolean {
   const entries = Object.entries(local);
   if (entries.length === 0) return false;
   const mine = getSolved(code);
-  for (const [card, at] of entries) {
-    const existing = mine[card];
-    if (!existing || at < existing) mine[card] = at;
-    queue(code, { op: "put", card: Number(card), at });
+  for (const [card, entry] of entries) {
+    const at = entryAt(entry);
+    if (at === null) continue;
+    const moves = entryMoves(entry);
+    // Both sides go through `entryAt` before the comparison. A raw `<` on the
+    // entries would coerce an object to `[object Object]` and keep the wrong
+    // timestamp, quietly, and `HSETNX` would then fix the wrong one in the store.
+    const existing = entryAt(mine[card]);
+    if (existing === null || at < existing) mine[card] = entryFor(at, moves);
+    queue(code, { op: "put", card: Number(card), at, ...(moves === null ? {} : { moves }) });
   }
   setSolved(code, mine);
   drop(LOCAL_SOLVED_KEY);
@@ -171,13 +224,39 @@ export function setSolved(code: string | null, map: SolvedMap): void {
 }
 
 export function isSolved(code: string | null, card: number): boolean {
-  return typeof getSolved(code)[String(card)] === "string";
+  return entryAt(getSolved(code)[String(card)]) !== null;
 }
 
-/** Paints the mirror before the network is asked, so the tap feels immediate. */
-export function paintSolved(code: string | null, card: number, at: string): void {
+/**
+ * Paints the mirror before the network is asked, so the tap feels immediate.
+ *
+ * It writes exactly what it is given, so a tick with no count carries none. That
+ * matches the store, where an untick clears both fields and a fresh solve starts
+ * without a number; the callers that are restoring an earlier state rather than
+ * making a new one pass the count they saved.
+ */
+export function paintSolved(
+  code: string | null,
+  card: number,
+  at: string,
+  moves: number | null = null,
+): void {
   const map = getSolved(code);
-  map[String(card)] = at;
+  map[String(card)] = entryFor(at, moves);
+  setSolved(code, map);
+  announce();
+}
+
+/**
+ * The count on its own. The moment is read back out of the entry and kept, so a
+ * correction is a correction rather than a re-solve, and an unsolved card is
+ * left alone: there is nowhere to hang a number until the tick has happened.
+ */
+export function paintMoves(code: string | null, card: number, moves: number): void {
+  const map = getSolved(code);
+  const at = entryAt(map[String(card)]);
+  if (at === null) return;
+  map[String(card)] = { at, moves };
   setSolved(code, map);
   announce();
 }
@@ -196,12 +275,22 @@ export function paintUnsolved(code: string | null, card: number): void {
  * write is still on its way. Last write wins at the server, and there are no
  * tombstones.
  */
-export function adoptServerSolves(code: string, solved: { card: number; at: string }[]): void {
+export function adoptServerSolves(
+  code: string,
+  solved: { card: number; at: string; moves?: number }[],
+): void {
   const map: SolvedMap = {};
-  for (const solve of solved) map[String(solve.card)] = solve.at;
+  for (const solve of solved) map[String(solve.card)] = entryFor(solve.at, solve.moves ?? null);
   for (const pending of pendingWrites(code)) {
-    if (pending.op === "put") map[String(pending.card)] = pending.at;
-    else delete map[String(pending.card)];
+    if (pending.op === "del") {
+      delete map[String(pending.card)];
+      continue;
+    }
+    // A pending tick that carries no count of its own must not blank a count the
+    // server already holds. The moment and the count are separate writes and
+    // only one of them is in flight, so the other one is not being contradicted.
+    const moves = pending.moves ?? entryMoves(map[String(pending.card)]);
+    map[String(pending.card)] = entryFor(pending.at, moves);
   }
   setSolved(code, map);
   announce();
@@ -252,8 +341,17 @@ export function unqueue(code: string, op: OutboxOp): void {
   );
 }
 
+/**
+ * `moves` is part of the comparison, and leaving it out is a silent loss rather
+ * than a near miss. A count typed against a card that is already ticked reuses
+ * that card's `at` by design, so the count is the only field that tells the two
+ * writes apart. Without it `superseded()` reads the stale write as still queued
+ * and sends it, and the `unqueue()` that follows matches the newer entry and
+ * takes the correction out of the outbox: the number is gone, with no error
+ * anywhere and nothing left to replay it.
+ */
 function isSameOp(a: OutboxOp, b: OutboxOp): boolean {
-  return a.card === b.card && a.op === b.op && a.at === b.at;
+  return a.card === b.card && a.op === b.op && a.at === b.at && a.moves === b.moves;
 }
 
 // ── The network half ────────────────────────────────────────────────────────
@@ -342,11 +440,13 @@ function adoptBody(code: string, body: unknown): void {
   adoptServerSolves(
     code,
     solved.filter(
-      (entry): entry is { card: number; at: string } =>
+      (entry): entry is { card: number; at: string; moves?: number } =>
         !!entry &&
         typeof entry === "object" &&
         typeof (entry as { card: unknown }).card === "number" &&
-        typeof (entry as { at: unknown }).at === "string",
+        typeof (entry as { at: unknown }).at === "string" &&
+        ((entry as { moves: unknown }).moves === undefined ||
+          typeof (entry as { moves: unknown }).moves === "number"),
     ),
   );
 }
@@ -366,7 +466,11 @@ async function send(code: string, op: OutboxOp): Promise<SendResult> {
         ? await fetch(url, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ at: op.at }),
+            // An absent `moves` is left out of the body rather than sent as
+            // null, and the route reads absence as "leave the stored count
+            // alone". That is what keeps a replayed tick from erasing a number
+            // typed after it was queued.
+            body: JSON.stringify({ at: op.at, moves: op.moves }),
             signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
           })
         : await fetch(url, { method: "DELETE", signal: AbortSignal.timeout(SEND_TIMEOUT_MS) });
@@ -386,25 +490,22 @@ async function send(code: string, op: OutboxOp): Promise<SendResult> {
   }
 }
 
-/** One tap. `code` null means no board is claimed: the solve stays on the phone. */
-export async function toggleSolve(
-  code: string | null,
-  card: number,
-  want: boolean,
-): Promise<void> {
-  const previous = getSolved(code)[String(card)];
-  const at = want ? new Date().toISOString() : (previous ?? new Date().toISOString());
-
-  if (want) paintSolved(code, card, at);
-  else paintUnsolved(code, card);
-  if (!code) return;
-
-  const op: OutboxOp = { op: want ? "put" : "del", card, at };
-
-  // This tap contradicts anything still queued for the card, so that write goes
+/**
+ * The tail every mirror write shares: contradict what is queued for the card,
+ * respect a running hold, send, and then choose between keeping the write for a
+ * retry and putting the paint back. `revert` is the caller's undo, because only
+ * the caller knows what the card looked like before it painted.
+ *
+ * It is one function rather than one per caller because what it holds is the
+ * concurrency rules, and two copies of those is how they rot. A second writer
+ * that forgot the overtaken check would look correct for as long as nobody
+ * tapped twice quickly.
+ */
+async function sendWrite(code: string, op: OutboxOp, revert: () => void): Promise<void> {
+  // This write contradicts anything still queued for the card, so that one goes
   // now rather than on the next flush: replaying it would put back a solve the
   // reader has just undone, on the phone and on every other board.
-  dequeueCard(code, card);
+  dequeueCard(code, op.card);
 
   if (onHold()) {
     queue(code, op);
@@ -412,16 +513,65 @@ export async function toggleSolve(
   }
 
   const result = await sendPending(code, op);
-  // A later tap for this card is on the wire or already queued: this write lost,
-  // and re-queuing it (or reverting its paint) would undo that tap.
+  // A later write for this card is on the wire or already queued: this one lost,
+  // and re-queuing it (or reverting its paint) would undo that one.
   const overtaken = () =>
-    inFlight.get(code)?.has(card) || getOutbox(code).some((pending) => pending.card === card);
+    inFlight.get(code)?.has(op.card) ||
+    getOutbox(code).some((pending) => pending.card === op.card);
   if (result === "retry") {
     if (!overtaken()) queue(code, op);
   } else if (result === "drop" && !overtaken()) {
-    if (want) paintUnsolved(code, card);
-    else paintSolved(code, card, at);
+    revert();
   }
+}
+
+/** One tap. `code` null means no board is claimed: the solve stays on the phone. */
+export async function toggleSolve(
+  code: string | null,
+  card: number,
+  want: boolean,
+): Promise<void> {
+  const previous = getSolved(code)[String(card)];
+  const previousAt = entryAt(previous);
+  const previousMoves = entryMoves(previous);
+  const at = want ? new Date().toISOString() : (previousAt ?? new Date().toISOString());
+
+  if (want) paintSolved(code, card, at);
+  else paintUnsolved(code, card);
+  if (!code) return;
+
+  await sendWrite(code, { op: want ? "put" : "del", card, at }, () => {
+    // Reverting an untick puts the count back with the moment: the server
+    // refused the delete, so the solve it had is still whole.
+    if (want) paintUnsolved(code, card);
+    else paintSolved(code, card, at, previousMoves);
+  });
+}
+
+/**
+ * The number of moves a card took, typed against a card that is already ticked.
+ *
+ * The moment is reused rather than remade. The store keeps the first `at` it was
+ * given and this write carries that same one, so a reader correcting a miscount
+ * is correcting a count and not re-dating their solve. An unsolved card records
+ * nothing: the tick is what creates the place a number goes.
+ */
+export async function recordMoves(
+  code: string | null,
+  card: number,
+  moves: number,
+): Promise<void> {
+  const previous = getSolved(code)[String(card)];
+  const at = entryAt(previous);
+  if (at === null) return;
+  const previousMoves = entryMoves(previous);
+
+  paintMoves(code, card, moves);
+  if (!code) return;
+
+  await sendWrite(code, { op: "put", card, at, moves }, () => {
+    paintSolved(code, card, at, previousMoves);
+  });
 }
 
 /** Pulls the server's list and adopts it. False when the store was unreachable. */
@@ -497,6 +647,9 @@ async function replay(code: string): Promise<boolean> {
     unqueue(code, op);
     if (result === "drop") {
       // The server will never take this write, so the paint goes back with it.
+      // A reverted delete restores what the op knows, which is the moment and
+      // not a count: the count that went with it is the store's to hand back,
+      // and the pull below is where it comes from.
       if (op.op === "put") paintUnsolved(code, op.card);
       else paintSolved(code, op.card, op.at);
     }

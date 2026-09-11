@@ -10,9 +10,12 @@ import {
   CODE_LENGTH,
   generateCode,
   isValidCode,
+  MAX_MOVES,
+  movesField,
   normalizeCode,
   panelRowText,
   parseCard,
+  parseMoves,
   pickUpAt,
   relativeTime,
   resolveAt,
@@ -182,6 +185,86 @@ describe("solvesFromHash()", () => {
   it("treats a missing hash as no solves", () => {
     assert.deepEqual(solvesFromHash(null), []);
     assert.deepEqual(solvesFromHash({}), []);
+  });
+
+  it("reads a move count out of the field beside the card", () => {
+    const solved = solvesFromHash({
+      "3": "2026-09-03T00:00:00.000Z",
+      [movesField(3)]: "28",
+      "1": "2026-09-01T00:00:00.000Z",
+    });
+    assert.deepEqual(solved, [
+      { card: 1, at: "2026-09-01T00:00:00.000Z" },
+      { card: 3, at: "2026-09-03T00:00:00.000Z", moves: 28 },
+    ]);
+  });
+
+  it("reads a count whichever order the hash hands the two fields back in", () => {
+    // Upstash returns hash fields in no particular order, which is why the
+    // count is read on a second pass rather than as it arrives.
+    const solved = solvesFromHash({
+      [movesField(7)]: "12",
+      "7": "2026-09-07T00:00:00.000Z",
+    });
+    assert.deepEqual(solved, [{ card: 7, at: "2026-09-07T00:00:00.000Z", moves: 12 }]);
+  });
+
+  it("drops a count with no solve beside it rather than inventing one", () => {
+    // An orphan would otherwise inflate summarise().count by one, and put a
+    // card on the deck that nobody has solved.
+    const solved = solvesFromHash({
+      "2": "2026-09-02T00:00:00.000Z",
+      [movesField(9)]: "40",
+      [movesField(61)]: "40",
+      [movesField(0)]: "40",
+    });
+    assert.deepEqual(solved, [{ card: 2, at: "2026-09-02T00:00:00.000Z" }]);
+    assert.equal(summarise(solved).count, 1);
+  });
+
+  it("drops a count that does not parse rather than surfacing NaN", () => {
+    const solved = solvesFromHash({
+      "4": "2026-09-04T00:00:00.000Z",
+      [movesField(4)]: "later",
+      "5": "2026-09-05T00:00:00.000Z",
+      [movesField(5)]: "",
+    });
+    assert.deepEqual(solved, [
+      { card: 4, at: "2026-09-04T00:00:00.000Z" },
+      { card: 5, at: "2026-09-05T00:00:00.000Z" },
+    ]);
+  });
+
+  it("is invisible to a reader that predates the count", () => {
+    // `m:31` fails parseCard the way every other non-card field does, so a hash
+    // a new server has written reads on an old client exactly as it used to.
+    assert.equal(parseCard(movesField(31)), null);
+  });
+});
+
+describe("parseMoves()", () => {
+  it("takes a whole count as a string or a number", () => {
+    assert.equal(parseMoves("28"), 28);
+    assert.equal(parseMoves(28), 28);
+    assert.equal(parseMoves(" 28 "), 28);
+    assert.equal(parseMoves(MAX_MOVES), MAX_MOVES);
+  });
+
+  it("refuses zero, which is not a solve, and everything below it", () => {
+    assert.equal(parseMoves("0"), null);
+    assert.equal(parseMoves(0), null);
+    assert.equal(parseMoves("-3"), null);
+  });
+
+  it("refuses a float, a leading zero and anything that is not a number", () => {
+    for (const raw of ["2.5", "07", "1e3", "abc", "", " ", null, undefined, true, {}]) {
+      assert.equal(parseMoves(raw), null, String(raw));
+    }
+  });
+
+  it("caps at MAX_MOVES, so a mistyped field cannot reach the store", () => {
+    assert.equal(parseMoves(MAX_MOVES + 1), null);
+    assert.equal(parseMoves("100000"), null);
   });
 });
 
