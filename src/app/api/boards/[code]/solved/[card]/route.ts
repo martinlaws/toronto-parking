@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-import { badAt, badCard, json, notFound, rateLimited, readAt } from "@/lib/api";
+import { badAt, badCard, badMoves, json, notFound, rateLimited, readSolve } from "@/lib/api";
 import {
   boardExists,
   isValidCode,
@@ -8,13 +8,16 @@ import {
   normalizeCode,
   parseCard,
   resolveAt,
+  resolveMoves,
   unmarkSolved,
 } from "@/lib/boards";
 
 /**
- * The card and the timestamp are checked before the code, so every 400 this
- * route can return is the same whether or not the board exists. Checking the
- * code first would let a probe read a `bad_card` as "that board is real".
+ * The card, the timestamp and the move count are all checked before the code, so
+ * every 400 this route can return is the same whether or not the board exists.
+ * Checking the code first would let a probe read a `bad_card` as "that board is
+ * real", and a new field is a new way to make that mistake: `bad_moves` belongs
+ * beside `bad_at`, above `normalizeCode`, and nowhere below it.
  */
 
 export async function PUT(
@@ -28,15 +31,17 @@ export async function PUT(
   const n = parseCard(card);
   if (n === null) return badCard();
 
-  const field = await readAt(request);
-  if (!field.ok) return badAt();
-  const at = resolveAt(field.at);
+  const fields = await readSolve(request);
+  if (!fields.ok) return badAt();
+  const at = resolveAt(fields.at);
   if (!at.ok) return badAt();
+  const moves = resolveMoves(fields.moves);
+  if (!moves.ok) return badMoves();
 
   const canonical = normalizeCode(code);
   if (!isValidCode(canonical) || !(await boardExists(canonical))) return notFound();
 
-  return json({ solved: await markSolved(canonical, n, at.at) });
+  return json({ solved: await markSolved(canonical, n, at.at, moves.moves) });
 }
 
 export async function DELETE(

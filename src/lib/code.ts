@@ -1,7 +1,7 @@
 import { DECK_SIZE } from "./tiers";
 
 /**
- * The code alphabet and the two validators, kept free of every store and Node
+ * The code alphabet and the field validators, kept free of every store and Node
  * import so a `'use client'` component can hold them without dragging the Redis
  * client into the browser bundle. `boards.ts` re-exports all of it.
  */
@@ -35,6 +35,29 @@ export function parseCard(raw: unknown): number | null {
   if (!/^[1-9][0-9]*$/.test(text)) return null;
   const n = Number(text);
   return n >= 1 && n <= DECK_SIZE ? n : null;
+}
+
+/**
+ * The ceiling on a move count. Card 60's par is 60 and someone retracing their
+ * steps can take several times that, so the number is loose on purpose: it is
+ * here to keep a mistyped field out of the store, not to judge a solve.
+ */
+export const MAX_MOVES = 999;
+
+/**
+ * An integer in 1..MAX_MOVES, or null. Zero is not a solve, and the grammar
+ * `parseCard` uses rules out floats, signs and leading zeros the same way.
+ *
+ * It sits beside `parseCard` for the reason that one is here: the field a reader
+ * types on the card page and the route that stores what they typed have to agree
+ * on what a number is, and this is the file both of them can import.
+ */
+export function parseMoves(raw: unknown): number | null {
+  if (typeof raw !== "string" && typeof raw !== "number") return null;
+  const text = String(raw).trim();
+  if (!/^[1-9][0-9]*$/.test(text)) return null;
+  const n = Number(text);
+  return n <= MAX_MOVES ? n : null;
 }
 
 /**

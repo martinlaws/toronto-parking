@@ -2,12 +2,17 @@ import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 
 import {
+  entryAt,
+  entryMoves,
   flush,
   getOutbox,
   getSolved,
+  isSolved,
+  recordMoves,
   resync,
   setBoard,
   solvedCards,
+  solvedKeyFor,
   toggleSolve,
 } from "../src/lib/local";
 import { savedOnThisPhone } from "../src/components/SolveToggle";
@@ -38,8 +43,13 @@ class FakeStorage {
   }
 }
 
-/** The server's hash, plus the four ways it can refuse. */
-let solved: Map<number, string>;
+/**
+ * The server's hash, plus the four ways it can refuse. A value is the pair the
+ * real hash holds in two fields: the moment, written once, and the count, which
+ * the latest write wins.
+ */
+let solved: Map<number, { at: string; moves?: number }>;
+let storage: FakeStorage;
 let offline: boolean;
 let refused: Set<number>;
 let failing: Set<number>;
@@ -80,11 +90,19 @@ function cardsOn(): number[] {
   return [...solved.keys()].sort((a, b) => a - b);
 }
 
+function atOn(card: number): string | undefined {
+  return solved.get(card)?.at;
+}
+
+function movesOn(card: number): number | undefined {
+  return solved.get(card)?.moves;
+}
+
 function body(): string {
   return JSON.stringify({
     solved: [...solved.entries()]
       .sort((a, b) => a[0] - b[0])
-      .map(([card, at]) => ({ card, at })),
+      .map(([card, entry]) => ({ card, ...entry })),
   });
 }
 
@@ -121,10 +139,12 @@ async function fakeFetch(input: RequestInfo | URL, init: RequestInit = {}): Prom
   if (failing.has(card)) return new Response("", { status: 500 });
   if (refused.has(card)) return new Response(JSON.stringify({ error: "not_found" }), { status: 404 });
   if (method === "PUT") {
-    const at = (JSON.parse(String(init.body)) as { at: string }).at;
-    if (!solved.has(card)) solved.set(card, at); // HSETNX keeps the first value
+    const sent = JSON.parse(String(init.body)) as { at: string; moves?: number };
+    const entry = solved.get(card) ?? { at: sent.at }; // HSETNX keeps the first moment
+    if (sent.moves !== undefined) entry.moves = sent.moves; // HSET takes the latest count
+    solved.set(card, entry);
   } else {
-    solved.delete(card);
+    solved.delete(card); // both fields go with it
   }
   return new Response(body(), { status: 200 });
 }
@@ -141,8 +161,9 @@ beforeEach(() => {
   gates = new Map();
 
   const target = new EventTarget();
+  storage = new FakeStorage();
   const fake = {
-    localStorage: new FakeStorage(),
+    localStorage: storage,
     addEventListener: target.addEventListener.bind(target),
     removeEventListener: target.removeEventListener.bind(target),
     dispatchEvent: target.dispatchEvent.bind(target),
@@ -214,8 +235,8 @@ describe("replaying the outbox", () => {
     offline = false;
 
     assert.equal(await flush(CODE), true);
-    assert.equal(getSolved(CODE)["4"], queued);
-    assert.equal(solved.get(4), queued);
+    assert.equal(entryAt(getSolved(CODE)["4"]), queued);
+    assert.equal(atOn(4), queued);
   });
 
   it("replays once when two components ask at the same time", async () => {
@@ -311,7 +332,7 @@ describe("a second tap while the first write is still open", () => {
 
 describe("a pull that is already open when the reader taps", () => {
   it("keeps the tap rather than painting the older list back over it", async () => {
-    solved.set(7, "2026-09-01T00:00:00.000Z");
+    solved.set(7, { at: "2026-09-01T00:00:00.000Z" });
     assert.equal(await flush(CODE), true);
     assert.deepEqual(solvedCards(CODE), [7]);
 
@@ -429,6 +450,181 @@ describe("coming back online", () => {
     assert.deepEqual(writes, ["PUT 1", "PUT 1"]);
     assert.deepEqual(cardsOn(), [1]);
     assert.deepEqual(getOutbox(CODE), []);
+  });
+});
+
+describe("a mirror written before a solve could carry a count", () => {
+  it("still reads as solved, and keeps the moment it already had", () => {
+    // The shape every phone that has ever ticked a card is holding. A guard
+    // that took only the new one would answer `{}` for the whole map and take
+    // every solve off the deck at once.
+    storage.setItem(
+      solvedKeyFor(CODE),
+      JSON.stringify({ "4": "2026-09-04T00:00:00.000Z", "9": "2026-09-09T00:00:00.000Z" }),
+    );
+
+    assert.equal(isSolved(CODE, 4), true);
+    assert.deepEqual(solvedCards(CODE), [4, 9]);
+    assert.equal(entryAt(getSolved(CODE)["4"]), "2026-09-04T00:00:00.000Z");
+    assert.equal(entryMoves(getSolved(CODE)["4"]), null);
+  });
+
+  it("reads a map that is half one shape and half the other", () => {
+    // What a mirror looks like between the first count and the next adopt.
+    storage.setItem(
+      solvedKeyFor(null),
+      JSON.stringify({ "4": "2026-09-04T00:00:00.000Z", "9": { at: "2026-09-09T00:00:00.000Z", moves: 30 } }),
+    );
+
+    assert.deepEqual(solvedCards(null), [4, 9]);
+    assert.equal(entryMoves(getSolved(null)["4"]), null);
+    assert.equal(entryMoves(getSolved(null)["9"]), 30);
+  });
+
+  it("takes a count against one without re-dating the solve", async () => {
+    storage.setItem(solvedKeyFor(CODE), JSON.stringify({ "4": "2026-09-04T00:00:00.000Z" }));
+
+    await recordMoves(CODE, 4, 30);
+
+    assert.equal(entryAt(getSolved(CODE)["4"]), "2026-09-04T00:00:00.000Z");
+    assert.equal(entryMoves(getSolved(CODE)["4"]), 30);
+    assert.equal(atOn(4), "2026-09-04T00:00:00.000Z");
+    assert.equal(movesOn(4), 30);
+  });
+});
+
+describe("recording the moves a card took", () => {
+  it("leaves the moment of the solve where it was", async () => {
+    await toggleSolve(CODE, 6, true);
+    const at = entryAt(getSolved(CODE)["6"]);
+
+    await recordMoves(CODE, 6, 18);
+
+    assert.equal(entryAt(getSolved(CODE)["6"]), at);
+    assert.equal(entryMoves(getSolved(CODE)["6"]), 18);
+    assert.equal(atOn(6), at);
+    assert.equal(movesOn(6), 18);
+    assert.deepEqual(writes, ["PUT 6", "PUT 6"]);
+    assert.deepEqual(getOutbox(CODE), []);
+  });
+
+  it("records nothing against a card that has not been ticked", async () => {
+    await recordMoves(CODE, 11, 22);
+
+    assert.deepEqual(solvedCards(CODE), []);
+    assert.deepEqual(writes, []);
+    assert.deepEqual(getOutbox(CODE), []);
+  });
+
+  it("carries the count in the write it queues offline", async () => {
+    await toggleSolve(CODE, 2, true);
+    offline = true;
+    await recordMoves(CODE, 2, 14);
+
+    assert.deepEqual(
+      getOutbox(CODE).map((op) => [op.card, op.moves]),
+      [[2, 14]],
+    );
+    assert.equal(movesOn(2), undefined);
+
+    offline = false;
+    assert.equal(await flush(CODE), true);
+    assert.equal(movesOn(2), 14);
+    assert.equal(entryMoves(getSolved(CODE)["2"]), 14);
+  });
+
+  it("puts the earlier count back when the server refuses a correction", async () => {
+    await toggleSolve(CODE, 7, true);
+    await recordMoves(CODE, 7, 20);
+
+    refused.add(7);
+    await recordMoves(CODE, 7, 21);
+
+    // The server will never take this write, so the mirror goes back to the
+    // number it is still holding rather than showing one nothing agrees with.
+    assert.equal(entryMoves(getSolved(CODE)["7"]), 20);
+    assert.equal(movesOn(7), 20);
+    assert.deepEqual(getOutbox(CODE), []);
+  });
+
+  it("puts the count back with the solve when the server refuses an untick", async () => {
+    await toggleSolve(CODE, 8, true);
+    await recordMoves(CODE, 8, 24);
+    const at = entryAt(getSolved(CODE)["8"]);
+
+    refused.add(8);
+    await toggleSolve(CODE, 8, false);
+
+    // Reverting the delete restores a whole solve: the server still holds both
+    // fields, so bringing back the moment without the count would be a state
+    // that exists nowhere.
+    assert.equal(entryAt(getSolved(CODE)["8"]), at);
+    assert.equal(entryMoves(getSolved(CODE)["8"]), 24);
+    assert.deepEqual(getOutbox(CODE), []);
+  });
+
+  it("keeps a correction that a stale tick would otherwise take with it", async () => {
+    // The isSameOp case, and the only one in this file that fails silently: the
+    // correction reuses the solve's own `at`, so the count is the one field
+    // that tells it apart from the tick still sitting in the replay's snapshot.
+    offline = true;
+    await toggleSolve(CODE, 3, true);
+    await toggleSolve(CODE, 4, true);
+    offline = false;
+
+    const first = gate("PUT 3");
+    const replaying = flush(CODE);
+    await first.arrived;
+
+    // The reader types a count for card 4 while the replay is still on card 3,
+    // and the connection refuses that one write, so it goes back in the outbox
+    // in place of the plain tick the replay is about to reach.
+    failing.add(4);
+    await recordMoves(CODE, 4, 28);
+    failing.delete(4);
+    assert.deepEqual(
+      getOutbox(CODE).map((op) => [op.card, op.moves]),
+      [[3, undefined], [4, 28]],
+    );
+
+    first.release();
+    await replaying;
+
+    // A blind comparison would read the correction as the tick, send the tick,
+    // and then unqueue the correction: the number would be gone with no error.
+    assert.deepEqual(writes, ["PUT 3", "PUT 4"]);
+    assert.equal(entryMoves(getSolved(CODE)["4"]), 28);
+    assert.deepEqual(
+      getOutbox(CODE).map((op) => [op.card, op.moves]),
+      [[4, 28]],
+    );
+
+    assert.equal(await flush(CODE), true);
+    assert.equal(movesOn(4), 28);
+  });
+});
+
+describe("an adopt that lands while a plain tick is still on the wire", () => {
+  it("keeps the count the server already holds", async () => {
+    // The tick and the count are separate writes. A tick carrying none of its
+    // own is not contradicting a number, so laying it over the server's list
+    // must not blank one.
+    solved.set(5, { at: "2026-09-01T00:00:00.000Z", moves: 28 });
+    offline = true;
+    await toggleSolve(CODE, 5, true);
+    offline = false;
+
+    const pulling = gate(`GET ${CODE}`);
+    const syncing = flush(CODE);
+    // By the time the closing pull is issued the replay has sent the tick and
+    // adopted the body that came back, with the tick still in flight.
+    await pulling.arrived;
+    assert.equal(entryMoves(getSolved(CODE)["5"]), 28);
+
+    pulling.release();
+    assert.equal(await syncing, true);
+    assert.equal(entryMoves(getSolved(CODE)["5"]), 28);
+    assert.equal(movesOn(5), 28);
   });
 });
 
