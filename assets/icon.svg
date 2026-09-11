@@ -12,10 +12,10 @@
   <circle cx="160" cy="352" r="10" fill="#FFFFFF" opacity="0.55"/>
   <circle cx="352" cy="352" r="10" fill="#FFFFFF" opacity="0.55"/>
   <g>
-    <rect x="120" y="198" width="272" height="116" rx="32" fill="#F76A55" stroke="#FFB0A0" stroke-width="8"/>
-    <rect x="132" y="210" width="248" height="22" rx="11" fill="#FFB0A0" opacity="0.3"/>
-    <rect x="194" y="228" width="124" height="66" rx="22" fill="#1E1C1A" fill-opacity="0.82" stroke="#FFB0A0" stroke-width="6"/>
-    <path d="M 214 276 A 18 18 0 0 1 250 276" fill="none" stroke="#FFB0A0" stroke-width="8" stroke-linecap="round"/>
-    <path d="M 262 276 A 18 18 0 0 1 298 276" fill="none" stroke="#FFB0A0" stroke-width="8" stroke-linecap="round"/>
+    <rect x="120" y="198" width="272" height="116" rx="32" fill="#FFB0A0" stroke="#F76A55" stroke-width="8"/>
+    <rect x="132" y="210" width="248" height="22" rx="11" fill="#F76A55" opacity="0.3"/>
+    <rect x="194" y="228" width="124" height="66" rx="22" fill="#1E1C1A" fill-opacity="0.82" stroke="#F76A55" stroke-width="6"/>
+    <path d="M 214 276 A 18 18 0 0 1 250 276" fill="none" stroke="#F76A55" stroke-width="8" stroke-linecap="round"/>
+    <path d="M 262 276 A 18 18 0 0 1 298 276" fill="none" stroke="#F76A55" stroke-width="8" stroke-linecap="round"/>
   </g>
 </svg>

@@ -1,11 +1,15 @@
 @import "tailwindcss";
 
-/* The seven print-derived hexes (asphalt through hero) were picked against
-   printed pieces on a phone (issue 1, 2026-09-08): asphalt, frame, glow, blue
-   and hero are final; yellow and green are provisional, one step paler like
-   the rest. Keep them in step with `src/lib/theme.ts`, the same palette
-   written for the places that need a JavaScript string, and with
-   `assets/icon.svg`; `tests/theme.test.ts` holds all three together. */
+/* Checked against the finished print on 2026-09-11, with all four boards in
+   hand (issue 1). The filament is semi-translucent, so a piece reads as the
+   pale value this palette used to call the edge rather than the saturated one
+   it called the body: blue, yellow, green and the hero are swapped, body and
+   edge trading places. Frame and asphalt were already right and neither is
+   translucent. Blue sits one step deeper than the straight swap, to hold the
+   luminance gap that lets a colour-blind reader tell it from green, and glow is
+   left alone because it is a printed marking rather than a piece. The why is in
+   `src/lib/theme.ts`. Keep this block, that file and `assets/icon.svg` in step;
+   `tests/theme.test.ts` holds all three together. */
 @theme {
   --color-ground: #faf7f2;
   --color-ground-edge: #efe9e0;
@@ -17,14 +21,14 @@
   --color-frame-edge: #d9d3c9;
   --color-glow: #84eaac;
   --color-glow-edge: #bdf7d5;
-  --color-car-blue: #63b6f0;
-  --color-car-blue-edge: #a9dbf9;
-  --color-car-yellow: #f6c04a;
-  --color-car-yellow-edge: #fbe19a;
-  --color-car-green: #8fd960;
-  --color-car-green-edge: #c3ef9f;
-  --color-hero: #f76a55;
-  --color-hero-edge: #ffb0a0;
+  --color-car-blue: #93CEF5;
+  --color-car-blue-edge: #63B6F0;
+  --color-car-yellow: #FBE19A;
+  --color-car-yellow-edge: #F6C04A;
+  --color-car-green: #C3EF9F;
+  --color-car-green-edge: #8FD960;
+  --color-hero: #FFB0A0;
+  --color-hero-edge: #F76A55;
 
   --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
