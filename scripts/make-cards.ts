@@ -156,7 +156,7 @@ function front(face: CardFace, slot: Slot): string {
   return `<section class="card front" style="left:${mm(slot.x)};top:${mm(slot.y)}">
   <p class="pk">Toronto Parking</p>
   <div class="pkrule"></div>
-  ${face.to ? `<p class="to">To ${escapeHtml(face.to)}</p>\n  ` : ""}<p class="what">Sixty layouts for the board in this box.</p>
+  ${face.to ? `<p class="to">To ${escapeHtml(face.to)}</p>\n  ` : ""}<p class="what">I made you a puzzle.<br>Scan this for sixty ways to play it.</p>
   <div class="qrwrap">${face.qrSvg}</div>
   <div class="paddr">
     <p class="crow"><span class="cl">Code</span><span class="cv">${face.code}</span></p>
@@ -233,7 +233,7 @@ html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:ex
 .pkrule{align-self:stretch;height:.26mm;background:#DED8CB;margin-top:2.08mm}
 .to{align-self:stretch;margin-top:3.2mm;font-family:"Newsreader",Georgia,serif;font-style:italic;font-variation-settings:"opsz" 20;font-size:5.6mm;line-height:1.1;color:#0F6B4B}
 .to + .what{margin-top:1.6mm}
-.what{align-self:stretch;margin-top:2.34mm;max-width:15em;font-family:"Newsreader",Georgia,serif;font-variation-settings:"opsz" 13;font-size:3.5mm;line-height:1.36;text-wrap:balance}
+.what{align-self:stretch;margin-top:2.34mm;font-family:"Newsreader",Georgia,serif;font-variation-settings:"opsz" 13;font-size:3.5mm;line-height:1.36;text-wrap:balance}
 .qrwrap{width:49mm;height:49mm;margin-top:3.4mm}
 .qrwrap svg{display:block;width:100%;height:100%}
 .paddr{align-self:stretch;margin-top:auto;padding-top:3.1mm;border-top:.26mm solid #DED8CB}
