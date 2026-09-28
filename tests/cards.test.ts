@@ -31,7 +31,7 @@ describe("parseCardArgs()", () => {
       paper: "letter",
       to: "",
       from: "",
-      fold: false,
+      fold: "none",
     });
   });
 
@@ -77,15 +77,28 @@ describe("--from", () => {
 });
 
 describe("--fold", () => {
-  it("fills each half of a landscape sheet inside the margin", () => {
+  it("fits the card inside the margin of every panel, never shorter than A7", () => {
     for (const paper of ["letter", "a4"] as const) {
-      const { sheet, half, scale, cardH } = foldGeometry(paper);
-      assert.equal(sheet.w, PAPER[paper].h);
-      assert.equal(half.w * 2, sheet.w);
-      assert.ok(Math.abs(74 * scale - (half.w - 2 * FOLD_MARGIN)) < 1e-9);
-      assert.ok(Math.abs(cardH * scale - (half.h - 2 * FOLD_MARGIN)) < 1e-9);
-      assert.ok(cardH >= 105, "the panel is never shorter than the A7 card it scales");
+      for (const fold of ["half", "quarter"] as const) {
+        const { sheet, panel, scale, cardH, inset } = foldGeometry(paper, fold);
+        assert.equal(panel.w * 2, sheet.w);
+        assert.equal(panel.h * (fold === "half" ? 1 : 2), sheet.h);
+        assert.ok(inset.x >= FOLD_MARGIN - 1e-9 && inset.y === FOLD_MARGIN);
+        assert.ok(74 * scale + 2 * inset.x <= panel.w + 1e-9);
+        assert.ok(Math.abs(cardH * scale - (panel.h - 2 * FOLD_MARGIN)) < 1e-9);
+        assert.ok(cardH >= 105 - 1e-9, `${paper} ${fold}: the panel is never shorter than the A7 card`);
+      }
     }
+  });
+
+  it("puts a quarter fold's back and front on the bottom half of an upright sheet", () => {
+    const g = foldGeometry("letter", "quarter");
+    assert.deepEqual([g.sheet.w, g.sheet.h], [215.9, 279.4]);
+    assert.deepEqual(g.back, { x: 0, y: 139.7 });
+    assert.deepEqual(g.front, { x: 107.95, y: 139.7 });
+    const html = renderFoldSheet([face(2)], "letter", "quarter");
+    assert.match(html, /@page\{size:letter;margin:0\}/);
+    assert.ok(html.indexOf('class="card back"') < html.indexOf('class="card front"'));
   });
 
   it("puts the back on the left and the front on the right, one sheet a card", () => {
@@ -100,7 +113,10 @@ describe("--fold", () => {
   });
 
   it("parses", () => {
-    assert.equal(parseCardArgs(["--fold"]).fold, true);
+    assert.equal(parseCardArgs(["--fold"]).fold, "half");
+    assert.equal(parseCardArgs(["--fold=quarter"]).fold, "quarter");
+    assert.equal(parseCardArgs(["--fold", "quarter"]).fold, "quarter");
+    assert.throws(() => parseCardArgs(["--fold=thirds"]));
   });
 });
 

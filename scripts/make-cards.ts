@@ -47,8 +47,10 @@ export type CardOptions = {
   paper: Paper;
   to: string;
   from: string;
-  fold: boolean;
+  fold: Fold;
 };
+
+export type Fold = "none" | "half" | "quarter";
 
 export type CardFace = { n: number; code: string; qrSvg: string; to?: string; from?: string };
 
@@ -66,7 +68,7 @@ export function parseCardArgs(argv: string[]): CardOptions {
     paper: "letter",
     to: "",
     from: "",
-    fold: false,
+    fold: "none",
   };
   const value = (token: string, name: string, next: () => string | undefined): string => {
     const inline = token.startsWith(`${name}=`) ? token.slice(name.length + 1) : undefined;
@@ -82,7 +84,15 @@ export function parseCardArgs(argv: string[]): CardOptions {
     else if (name === "--qr") options.qr = value(token, name, next);
     else if (name === "--out") options.out = value(token, name, next);
     else if (name === "--back") options.back = true;
-    else if (name === "--fold") options.fold = true;
+    else if (token === "--fold") {
+      const word = argv[i + 1];
+      options.fold = word === "half" || word === "quarter" ? (i++, word) : "half";
+    }
+    else if (name === "--fold") {
+      const fold = value(token, name, next);
+      if (fold !== "half" && fold !== "quarter") throw new Error(`--fold is half or quarter, not ${fold}`);
+      options.fold = fold;
+    }
     else if (name === "--to") options.to = value(token, name, next).trim();
     else if (name === "--from") options.from = value(token, name, next).trim();
     else if (name === "--paper") {
@@ -129,17 +139,25 @@ export function backSlots(front: Slot[], paper: Paper): Slot[] {
 export const FOLD_MARGIN = 8;
 
 /**
- * A folded card: the sheet turned landscape and folded down the middle, each
- * half a panel. The A7 design scales up uniformly to fill a panel inside the
- * margin, and the spare height goes to the gap above the code, as on A7.
+ * A folded card, printed on one side. `half`: the sheet turned landscape and
+ * folded down the middle, the back on the left half and the front on the
+ * right. `quarter`: the sheet upright and folded twice, top half behind and
+ * then left half behind, so the back and front take the bottom two quarters
+ * and the top half becomes the inside, left blank for a note.
+ *
+ * The A7 design scales up uniformly to the largest size that fits a panel
+ * inside the margin, centred across it; the spare height goes to the gap above
+ * the code, as on A7.
  */
-export function foldGeometry(paper: Paper) {
+export function foldGeometry(paper: Paper, fold: Exclude<Fold, "none">) {
   const { w, h } = PAPER[paper];
-  const sheet = { w: h, h: w };
-  const half = { w: sheet.w / 2, h: sheet.h };
-  const scale = (half.w - 2 * FOLD_MARGIN) / CARD_W;
-  const cardH = (half.h - 2 * FOLD_MARGIN) / scale;
-  return { sheet, half, scale, cardH };
+  const sheet = fold === "half" ? { w: h, h: w } : { w, h };
+  const panel = fold === "half" ? { w: sheet.w / 2, h: sheet.h } : { w: sheet.w / 2, h: sheet.h / 2 };
+  const scale = Math.min((panel.w - 2 * FOLD_MARGIN) / CARD_W, (panel.h - 2 * FOLD_MARGIN) / CARD_H);
+  const cardH = (panel.h - 2 * FOLD_MARGIN) / scale;
+  const inset = { x: (panel.w - CARD_W * scale) / 2, y: FOLD_MARGIN };
+  const top = fold === "half" ? 0 : panel.h;
+  return { sheet, panel, scale, cardH, inset, back: { x: 0, y: top }, front: { x: panel.w, y: top } };
 }
 
 export function numberWord(n: number): string {
@@ -247,10 +265,10 @@ function back(face: CardFace, slot: Slot, h = CARD_H, bleed = BLEED): string {
 const FONTS =
   "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=DM+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=block";
 
-function styles(paper: Paper, fold = false): string {
+function styles(paper: Paper, fold: Fold = "none"): string {
   const p = PAPER[paper];
-  const sheet = fold ? { w: p.h, h: p.w } : p;
-  return `@page{size:${p.css}${fold ? " landscape" : ""};margin:0}
+  const sheet = fold === "half" ? { w: p.h, h: p.w } : p;
+  return `@page{size:${p.css}${fold === "half" ? " landscape" : ""};margin:0}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .sheet{position:relative;width:${sheet.w}mm;height:${sheet.h}mm;overflow:hidden;break-after:page}
@@ -298,28 +316,24 @@ ${faces.map((face, i) => back(face, backSlots(slots, options.paper)[i])).join("\
   return documentOf(`${fronts}${backs}`, styles(options.paper));
 }
 
-/**
- * One landscape sheet per card, printed on one side and folded down the
- * middle: the back on the left half and the front on the right, so the front
- * is the cover once it is folded with the print outside.
- */
-export function renderFoldSheet(faces: CardFace[], paper: Paper): string {
+/** One sheet per card, laid out by `foldGeometry()`. */
+export function renderFoldSheet(faces: CardFace[], paper: Paper, fold: Exclude<Fold, "none"> = "half"): string {
   if (faces.length === 0 || faces.length > BOARD_COUNT) {
     throw new Error(`A sheet holds 1 to ${BOARD_COUNT} cards`);
   }
-  const { half, scale, cardH } = foldGeometry(paper);
-  const panel = (left: number, inner: string) =>
-    `<div class="panel" style="left:${mm(left + FOLD_MARGIN)};top:${mm(FOLD_MARGIN)};width:${mm(CARD_W)};height:${mm(cardH)};transform:scale(${Number(scale.toFixed(5))})">
+  const g = foldGeometry(paper, fold);
+  const panel = (at: Slot, inner: string) =>
+    `<div class="panel" style="left:${mm(at.x + g.inset.x)};top:${mm(at.y + g.inset.y)};width:${mm(CARD_W)};height:${mm(g.cardH)};transform:scale(${Number(g.scale.toFixed(5))})">
 ${inner}
 </div>`;
   const origin = { x: 0, y: 0 };
   const sheets = faces.map(
     (face) => `<div class="sheet">
-${panel(0, back(face, origin, cardH, 0))}
-${panel(half.w, front(face, origin, cardH))}
+${panel(g.back, back(face, origin, g.cardH, 0))}
+${panel(g.front, front(face, origin, g.cardH))}
 </div>`,
   );
-  return documentOf(sheets.join("\n"), styles(paper, true));
+  return documentOf(sheets.join("\n"), styles(paper, fold));
 }
 
 function documentOf(body: string, css: string): string {
@@ -378,12 +392,15 @@ function main(argv: string[]): void {
 
   mkdirSync(options.out, { recursive: true });
   const name = options.boards.length === 0 ? "cards" : `board-${[...wanted].sort((a, b) => a - b).join("-")}`;
-  const suffix = options.fold ? "-folded" : options.back ? "-duplex" : "";
+  const suffix = options.fold === "half" ? "-folded" : options.fold === "quarter" ? "-quarter" : options.back ? "-duplex" : "";
   const path = join(options.out, `${name}${suffix}.html`);
-  writeFileSync(path, options.fold ? renderFoldSheet(faces, options.paper) : renderSheet(faces, options), "utf8");
-  const how = options.fold
-    ? ", one landscape sheet each, fold down the middle with the print outside"
-    : options.back
+  writeFileSync(path, options.fold === "none" ? renderSheet(faces, options) : renderFoldSheet(faces, options.paper, options.fold), "utf8");
+  const how =
+    options.fold === "half"
+      ? ", one landscape sheet each, fold down the middle with the print outside"
+      : options.fold === "quarter"
+        ? ", one sheet each, fold the top half behind, then the left half behind"
+        : options.back
       ? ", backs on page 2 for a long-edge flip"
       : "";
   process.stdout.write(
