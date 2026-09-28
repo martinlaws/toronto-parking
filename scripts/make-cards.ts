@@ -47,6 +47,7 @@ export type CardOptions = {
   paper: Paper;
   to: string;
   from: string;
+  fold: boolean;
 };
 
 export type CardFace = { n: number; code: string; qrSvg: string; to?: string; from?: string };
@@ -65,6 +66,7 @@ export function parseCardArgs(argv: string[]): CardOptions {
     paper: "letter",
     to: "",
     from: "",
+    fold: false,
   };
   const value = (token: string, name: string, next: () => string | undefined): string => {
     const inline = token.startsWith(`${name}=`) ? token.slice(name.length + 1) : undefined;
@@ -80,6 +82,7 @@ export function parseCardArgs(argv: string[]): CardOptions {
     else if (name === "--qr") options.qr = value(token, name, next);
     else if (name === "--out") options.out = value(token, name, next);
     else if (name === "--back") options.back = true;
+    else if (name === "--fold") options.fold = true;
     else if (name === "--to") options.to = value(token, name, next).trim();
     else if (name === "--from") options.from = value(token, name, next).trim();
     else if (name === "--paper") {
@@ -121,6 +124,24 @@ export function backSlots(front: Slot[], paper: Paper): Slot[] {
   return front.map(({ x, y }) => ({ x: w - x - CARD_W, y }));
 }
 
+/** The white margin round each panel of a folded card: home printers cannot
+ *  print to the edge, so the dark back sits inside a border that looks meant. */
+export const FOLD_MARGIN = 8;
+
+/**
+ * A folded card: the sheet turned landscape and folded down the middle, each
+ * half a panel. The A7 design scales up uniformly to fill a panel inside the
+ * margin, and the spare height goes to the gap above the code, as on A7.
+ */
+export function foldGeometry(paper: Paper) {
+  const { w, h } = PAPER[paper];
+  const sheet = { w: h, h: w };
+  const half = { w: sheet.w / 2, h: sheet.h };
+  const scale = (half.w - 2 * FOLD_MARGIN) / CARD_W;
+  const cardH = (half.h - 2 * FOLD_MARGIN) / scale;
+  return { sheet, half, scale, cardH };
+}
+
 export function numberWord(n: number): string {
   const word = NUMBER_WORDS[n - 1];
   if (!word) throw new Error(`No board ${n}`);
@@ -155,9 +176,11 @@ function cropMarks({ x, y }: Slot): string {
   return lines.join("");
 }
 
-function front(face: CardFace, slot: Slot): string {
+const heightStyle = (h: number) => (h === CARD_H ? "" : `;height:${mm(h)}`);
+
+function front(face: CardFace, slot: Slot, h = CARD_H): string {
   const domain = new URL(SITE_URL).host;
-  return `<section class="card front" style="left:${mm(slot.x)};top:${mm(slot.y)}">
+  return `<section class="card front" style="left:${mm(slot.x)};top:${mm(slot.y)}${heightStyle(h)}">
   <p class="pk">${face.from ? `From ${escapeHtml(face.from)}` : "Toronto Parking"}</p>
   <div class="pkrule"></div>
   ${face.to ? `<p class="to">To ${escapeHtml(face.to)}</p>\n  ` : ""}<p class="what">I made you a puzzle.<br>Scan this for sixty ways to play it.</p>
@@ -169,7 +192,7 @@ function front(face: CardFace, slot: Slot): string {
 </section>`;
 }
 
-function inks(): string {
+function inks(h: number): string {
   const colours = [
     COLOURS.asphalt,
     COLOURS.frame,
@@ -183,29 +206,31 @@ function inks(): string {
   return colours
     .map(
       (fill, i) =>
-        `<rect x="${Number((8 + i * (w + 1.3)).toFixed(3))}" y="${CARD_H - 7 - 2.86}" width="${Number(w.toFixed(3))}" height="2.86" rx="0.4" fill="${fill}" stroke="rgba(255,255,255,.3)" stroke-width="0.16"/>`,
+        `<rect x="${Number((8 + i * (w + 1.3)).toFixed(3))}" y="${Number((h - 7 - 2.86).toFixed(3))}" width="${Number(w.toFixed(3))}" height="2.86" rx="0.4" fill="${fill}" stroke="rgba(255,255,255,.3)" stroke-width="0.16"/>`,
     )
     .join("");
 }
 
-function pegField(): string {
+function pegField(h: number, bleed: number): string {
   const dots: string[] = [];
-  for (let cx = 4.9 - 10.9; cx < CARD_W + BLEED; cx += 10.9) {
-    for (let cy = 6.4 - 10.9; cy < CARD_H + BLEED; cy += 10.9) {
-      if (cx < -BLEED || cy < -BLEED) continue;
+  for (let cx = 4.9 - 10.9; cx < CARD_W + bleed; cx += 10.9) {
+    for (let cy = 6.4 - 10.9; cy < h + bleed; cy += 10.9) {
+      if (cx < -bleed || cy < -bleed) continue;
       dots.push(`<circle cx="${Number(cx.toFixed(2))}" cy="${Number(cy.toFixed(2))}" r="0.45"/>`);
     }
   }
   return `<g fill="${COLOURS.frame}" fill-opacity=".13">${dots.join("")}</g>`;
 }
 
-function back(face: CardFace, slot: Slot): string {
+function back(face: CardFace, slot: Slot, h = CARD_H, bleed = BLEED): string {
   const g = COLOURS.glow;
-  return `<section class="card back" style="left:${mm(slot.x)};top:${mm(slot.y)}">
-  <svg class="ground" viewBox="${-BLEED} ${-BLEED} ${CARD_W + 2 * BLEED} ${CARD_H + 2 * BLEED}" aria-hidden="true">
-    <rect x="${-BLEED}" y="${-BLEED}" width="${CARD_W + 2 * BLEED}" height="${CARD_H + 2 * BLEED}" fill="${COLOURS.asphalt}"/>
-    ${pegField()}
-    ${inks()}
+  const gw = CARD_W + 2 * bleed;
+  const gh = Number((h + 2 * bleed).toFixed(3));
+  return `<section class="card back" style="left:${mm(slot.x)};top:${mm(slot.y)}${heightStyle(h)}">
+  <svg class="ground" style="left:${mm(-bleed)};top:${mm(-bleed)};width:${mm(gw)};height:${mm(gh)}" viewBox="${-bleed} ${-bleed} ${gw} ${gh}" aria-hidden="true">
+    <rect x="${-bleed}" y="${-bleed}" width="${gw}" height="${gh}" fill="${COLOURS.asphalt}"/>
+    ${pegField(h, bleed)}
+    ${inks(h)}
   </svg>
   <div class="backin">
     <svg class="exitmark" viewBox="0 0 132 40" aria-hidden="true">
@@ -222,12 +247,14 @@ function back(face: CardFace, slot: Slot): string {
 const FONTS =
   "https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=DM+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;1,6..72,400&display=block";
 
-function styles(paper: Paper): string {
+function styles(paper: Paper, fold = false): string {
   const p = PAPER[paper];
-  return `@page{size:${p.css};margin:0}
+  const sheet = fold ? { w: p.h, h: p.w } : p;
+  return `@page{size:${p.css}${fold ? " landscape" : ""};margin:0}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.sheet{position:relative;width:${p.w}mm;height:${p.h}mm;overflow:hidden;break-after:page}
+.sheet{position:relative;width:${sheet.w}mm;height:${sheet.h}mm;overflow:hidden;break-after:page}
+.panel{position:absolute;transform-origin:0 0}
 .sheet:last-child{break-after:auto}
 .marks{position:absolute;inset:0;width:100%;height:100%}
 .marks line{stroke:#000;stroke-width:.2}
@@ -246,7 +273,7 @@ html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:ex
 .cv{font-family:"DM Mono",ui-monospace,monospace;font-weight:500;font-size:5.45mm;line-height:1;letter-spacing:.22em;color:#131714}
 .url{margin-top:2.86mm;font-family:"Archivo",system-ui,sans-serif;font-variation-settings:"wdth" 100,"wght" 650;font-size:3.5mm;letter-spacing:.01em}
 .back{overflow:visible}
-.back .ground{position:absolute;left:-${BLEED}mm;top:-${BLEED}mm;width:${CARD_W + 2 * BLEED}mm;height:${CARD_H + 2 * BLEED}mm}
+.back .ground{position:absolute}
 .backin{position:absolute;inset:0;padding:8mm 8mm 20mm;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .exitmark{width:27mm;height:auto;display:block}
 .bk{margin-top:7mm;font-family:"DM Mono",ui-monospace,monospace;font-size:2.47mm;line-height:1;letter-spacing:.24em;text-transform:uppercase;color:#95908A}
@@ -268,16 +295,44 @@ ${faces.map((face, i) => front(face, slots[i])).join("\n")}
 ${faces.map((face, i) => back(face, backSlots(slots, options.paper)[i])).join("\n")}
 </div>`
     : "";
+  return documentOf(`${fronts}${backs}`, styles(options.paper));
+}
+
+/**
+ * One landscape sheet per card, printed on one side and folded down the
+ * middle: the back on the left half and the front on the right, so the front
+ * is the cover once it is folded with the print outside.
+ */
+export function renderFoldSheet(faces: CardFace[], paper: Paper): string {
+  if (faces.length === 0 || faces.length > BOARD_COUNT) {
+    throw new Error(`A sheet holds 1 to ${BOARD_COUNT} cards`);
+  }
+  const { half, scale, cardH } = foldGeometry(paper);
+  const panel = (left: number, inner: string) =>
+    `<div class="panel" style="left:${mm(left + FOLD_MARGIN)};top:${mm(FOLD_MARGIN)};width:${mm(CARD_W)};height:${mm(cardH)};transform:scale(${Number(scale.toFixed(5))})">
+${inner}
+</div>`;
+  const origin = { x: 0, y: 0 };
+  const sheets = faces.map(
+    (face) => `<div class="sheet">
+${panel(0, back(face, origin, cardH, 0))}
+${panel(half.w, front(face, origin, cardH))}
+</div>`,
+  );
+  return documentOf(sheets.join("\n"), styles(paper, true));
+}
+
+function documentOf(body: string, css: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <title>Toronto Parking cards</title>
 <link rel="stylesheet" href="${FONTS}">
-<style>${styles(options.paper)}</style>
+<style>${css}</style>
 </head>
 <body>
-${fronts}${backs}
+${body}
 </body>
 </html>
 `;
@@ -323,10 +378,16 @@ function main(argv: string[]): void {
 
   mkdirSync(options.out, { recursive: true });
   const name = options.boards.length === 0 ? "cards" : `board-${[...wanted].sort((a, b) => a - b).join("-")}`;
-  const path = join(options.out, `${name}${options.back ? "-duplex" : ""}.html`);
-  writeFileSync(path, renderSheet(faces, options), "utf8");
+  const suffix = options.fold ? "-folded" : options.back ? "-duplex" : "";
+  const path = join(options.out, `${name}${suffix}.html`);
+  writeFileSync(path, options.fold ? renderFoldSheet(faces, options.paper) : renderSheet(faces, options), "utf8");
+  const how = options.fold
+    ? ", one landscape sheet each, fold down the middle with the print outside"
+    : options.back
+      ? ", backs on page 2 for a long-edge flip"
+      : "";
   process.stdout.write(
-    `✓ ${path} · ${faces.length} card${faces.length === 1 ? "" : "s"}${options.back ? ", backs on page 2 for a long-edge flip" : ""}\n` +
+    `✓ ${path} · ${faces.length} card${faces.length === 1 ? "" : "s"}${how}\n` +
       `Open it in Chrome and print at 100% on ${options.paper === "a4" ? "A4" : "Letter"}, with Background graphics on.\n`,
   );
 }

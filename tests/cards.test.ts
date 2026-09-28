@@ -6,8 +6,11 @@ import {
   checkQrSvg,
   frontSlots,
   numberWord,
+  FOLD_MARGIN,
+  foldGeometry,
   PAPER,
   parseCardArgs,
+  renderFoldSheet,
   renderSheet,
   type CardFace,
 } from "../scripts/make-cards";
@@ -28,6 +31,7 @@ describe("parseCardArgs()", () => {
       paper: "letter",
       to: "",
       from: "",
+      fold: false,
     });
   });
 
@@ -69,6 +73,34 @@ describe("--from", () => {
     const html = renderSheet([{ ...face(2), from: "Wren" }], { back: false, paper: "letter" });
     assert.match(html, /<p class="pk">From Wren<\/p>/);
     assert.doesNotMatch(html, />Toronto Parking</);
+  });
+});
+
+describe("--fold", () => {
+  it("fills each half of a landscape sheet inside the margin", () => {
+    for (const paper of ["letter", "a4"] as const) {
+      const { sheet, half, scale, cardH } = foldGeometry(paper);
+      assert.equal(sheet.w, PAPER[paper].h);
+      assert.equal(half.w * 2, sheet.w);
+      assert.ok(Math.abs(74 * scale - (half.w - 2 * FOLD_MARGIN)) < 1e-9);
+      assert.ok(Math.abs(cardH * scale - (half.h - 2 * FOLD_MARGIN)) < 1e-9);
+      assert.ok(cardH >= 105, "the panel is never shorter than the A7 card it scales");
+    }
+  });
+
+  it("puts the back on the left and the front on the right, one sheet a card", () => {
+    const html = renderFoldSheet([face(2), face(3)], "letter");
+    assert.match(html, /@page\{size:letter landscape;margin:0\}/);
+    assert.equal(html.match(/class="sheet"/g)?.length, 2);
+    const first = html.slice(html.indexOf('class="sheet"'), html.indexOf('class="sheet"', html.indexOf('class="sheet"') + 1));
+    assert.ok(first.indexOf('class="card back"') < first.indexOf('class="card front"'));
+    assert.match(first, /class="panel" style="left:8mm;top:8mm;/);
+    assert.match(first, /class="panel" style="left:147.7mm;top:8mm;/);
+    assert.doesNotMatch(html, /class="marks"/);
+  });
+
+  it("parses", () => {
+    assert.equal(parseCardArgs(["--fold"]).fold, true);
   });
 });
 
