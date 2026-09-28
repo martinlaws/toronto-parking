@@ -18,7 +18,8 @@
     "boards:reset": "node --env-file=.env.local --import tsx scripts/seed-boards.ts --reset",
     "boards:rm": "node --env-file=.env.local --import tsx scripts/seed-boards.ts --rm",
     "qr:build": "node --import tsx scripts/make-qr.ts",
-    "icons:build": "node --import tsx scripts/make-icons.ts"
+    "icons:build": "node --import tsx scripts/make-icons.ts",
+    "cards:build": "node --import tsx scripts/make-cards.ts"
   },
   "dependencies": {
     "@upstash/ratelimit": "^2.0.8",
