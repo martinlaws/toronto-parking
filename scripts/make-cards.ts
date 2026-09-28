@@ -13,7 +13,8 @@ import { BOARD_COUNT, DEFAULT_FILE, validateSeedFile } from "./seed-boards";
  * large enough to type when a camera fails, and the domain. No name and no
  * dedication from the seed file: the surprise is on the page the card opens,
  * and nothing here reads either. A card can still be addressed by hand with
- * `--to <name>`, which prints "To <name>" under the title; the name comes from
+ * `--to <name>`, which prints "To <name>" under the title, and signed with
+ * `--from <name>`, which replaces the title with "From <name>"; the name comes from
  * the command line only, so it never lands in the repo.
  *
  * The back is optional and asks for duplex. Its sheet is mirrored left to right
@@ -45,9 +46,10 @@ export type CardOptions = {
   back: boolean;
   paper: Paper;
   to: string;
+  from: string;
 };
 
-export type CardFace = { n: number; code: string; qrSvg: string; to?: string };
+export type CardFace = { n: number; code: string; qrSvg: string; to?: string; from?: string };
 
 export type Slot = { x: number; y: number };
 
@@ -62,6 +64,7 @@ export function parseCardArgs(argv: string[]): CardOptions {
     back: false,
     paper: "letter",
     to: "",
+    from: "",
   };
   const value = (token: string, name: string, next: () => string | undefined): string => {
     const inline = token.startsWith(`${name}=`) ? token.slice(name.length + 1) : undefined;
@@ -78,6 +81,7 @@ export function parseCardArgs(argv: string[]): CardOptions {
     else if (name === "--out") options.out = value(token, name, next);
     else if (name === "--back") options.back = true;
     else if (name === "--to") options.to = value(token, name, next).trim();
+    else if (name === "--from") options.from = value(token, name, next).trim();
     else if (name === "--paper") {
       const paper = value(token, name, next);
       if (paper !== "letter" && paper !== "a4") throw new Error(`--paper is letter or a4, not ${paper}`);
@@ -154,7 +158,7 @@ function cropMarks({ x, y }: Slot): string {
 function front(face: CardFace, slot: Slot): string {
   const domain = new URL(SITE_URL).host;
   return `<section class="card front" style="left:${mm(slot.x)};top:${mm(slot.y)}">
-  <p class="pk">Toronto Parking</p>
+  <p class="pk">${face.from ? `From ${escapeHtml(face.from)}` : "Toronto Parking"}</p>
   <div class="pkrule"></div>
   ${face.to ? `<p class="to">To ${escapeHtml(face.to)}</p>\n  ` : ""}<p class="what">I made you a puzzle.<br>Scan this for sixty ways to play it.</p>
   <div class="qrwrap">${face.qrSvg}</div>
@@ -314,7 +318,7 @@ function main(argv: string[]): void {
         `No usable QR for board ${n} in ${options.qr}: ${error instanceof Error ? error.message : String(error)}. Run pnpm qr:build.`,
       );
     }
-    faces.push({ n, code: entry.code, qrSvg: svg, ...(options.to ? { to: options.to } : {}) });
+    faces.push({ n, code: entry.code, qrSvg: svg, ...(options.to ? { to: options.to } : {}), ...(options.from ? { from: options.from } : {}) });
   }
 
   mkdirSync(options.out, { recursive: true });
