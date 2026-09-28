@@ -27,6 +27,7 @@ describe("parseCardArgs()", () => {
       back: false,
       paper: "letter",
       to: "",
+      from: "",
     });
   });
 
@@ -58,6 +59,16 @@ describe("--to", () => {
     assert.doesNotMatch(renderSheet([face(2)], { back: false, paper: "letter" }), /class="to"/);
     const html = renderSheet([{ ...face(2), to: "Wren & <Co>" }], { back: false, paper: "letter" });
     assert.match(html, /<p class="to">To Wren &amp; &lt;Co&gt;<\/p>/);
+  });
+});
+
+describe("--from", () => {
+  it("replaces the title only when asked", () => {
+    assert.equal(parseCardArgs(["--from", " Wren "]).from, "Wren");
+    assert.match(renderSheet([face(2)], { back: false, paper: "letter" }), /<p class="pk">Toronto Parking<\/p>/);
+    const html = renderSheet([{ ...face(2), from: "Wren" }], { back: false, paper: "letter" });
+    assert.match(html, /<p class="pk">From Wren<\/p>/);
+    assert.doesNotMatch(html, />Toronto Parking</);
   });
 });
 
