@@ -26,6 +26,7 @@ describe("parseCardArgs()", () => {
       boards: [],
       back: false,
       paper: "letter",
+      to: "",
     });
   });
 
@@ -42,6 +43,21 @@ describe("parseCardArgs()", () => {
     assert.throws(() => parseCardArgs(["--paper", "legal"]));
     assert.throws(() => parseCardArgs(["--board"]));
     assert.throws(() => parseCardArgs(["--name"]));
+  });
+});
+
+describe("--to", () => {
+  it("addresses exactly one card", () => {
+    assert.equal(parseCardArgs(["--board", "2", "--to", " Wren "]).to, "Wren");
+    assert.throws(() => parseCardArgs(["--to", "Wren"]));
+    assert.throws(() => parseCardArgs(["--board", "1", "--board", "2", "--to=Wren"]));
+    assert.throws(() => parseCardArgs(["--board", "2", "--to"]));
+  });
+
+  it("prints the line only when asked, escaped", () => {
+    assert.doesNotMatch(renderSheet([face(2)], { back: false, paper: "letter" }), /class="to"/);
+    const html = renderSheet([{ ...face(2), to: "Wren & <Co>" }], { back: false, paper: "letter" });
+    assert.match(html, /<p class="to">To Wren &amp; &lt;Co&gt;<\/p>/);
   });
 });
 

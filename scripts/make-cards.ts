@@ -11,8 +11,10 @@ import { BOARD_COUNT, DEFAULT_FILE, validateSeedFile } from "./seed-boards";
  * sheet with crop marks. The front carries the QR from `out/qr/` (read, never
  * regenerated, so the printed code is the one already scanned), the code set
  * large enough to type when a camera fails, and the domain. No name and no
- * dedication: the surprise is on the page the card opens, and a `CardFace`
- * cannot carry either, so nothing here can print one by accident.
+ * dedication from the seed file: the surprise is on the page the card opens,
+ * and nothing here reads either. A card can still be addressed by hand with
+ * `--to <name>`, which prints "To <name>" under the title; the name comes from
+ * the command line only, so it never lands in the repo.
  *
  * The back is optional and asks for duplex. Its sheet is mirrored left to right
  * so a long-edge flip lands each back behind its front, and the asphalt runs
@@ -42,9 +44,10 @@ export type CardOptions = {
   boards: number[];
   back: boolean;
   paper: Paper;
+  to: string;
 };
 
-export type CardFace = { n: number; code: string; qrSvg: string };
+export type CardFace = { n: number; code: string; qrSvg: string; to?: string };
 
 export type Slot = { x: number; y: number };
 
@@ -58,6 +61,7 @@ export function parseCardArgs(argv: string[]): CardOptions {
     boards: [],
     back: false,
     paper: "letter",
+    to: "",
   };
   const value = (token: string, name: string, next: () => string | undefined): string => {
     const inline = token.startsWith(`${name}=`) ? token.slice(name.length + 1) : undefined;
@@ -73,6 +77,7 @@ export function parseCardArgs(argv: string[]): CardOptions {
     else if (name === "--qr") options.qr = value(token, name, next);
     else if (name === "--out") options.out = value(token, name, next);
     else if (name === "--back") options.back = true;
+    else if (name === "--to") options.to = value(token, name, next).trim();
     else if (name === "--paper") {
       const paper = value(token, name, next);
       if (paper !== "letter" && paper !== "a4") throw new Error(`--paper is letter or a4, not ${paper}`);
@@ -85,8 +90,14 @@ export function parseCardArgs(argv: string[]): CardOptions {
       if (!options.boards.includes(n)) options.boards.push(n);
     } else throw new Error(`Unknown argument ${token}`);
   }
+  if (options.to !== "" && options.boards.length !== 1) {
+    throw new Error("--to addresses one card, so it needs exactly one --board");
+  }
   return options;
 }
+
+const escapeHtml = (text: string) =>
+  text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 
 /** One card sits in the middle of the page; two to four take a 2 x 2 grid. */
 export function frontSlots(count: number, paper: Paper): Slot[] {
@@ -145,7 +156,7 @@ function front(face: CardFace, slot: Slot): string {
   return `<section class="card front" style="left:${mm(slot.x)};top:${mm(slot.y)}">
   <p class="pk">Toronto Parking</p>
   <div class="pkrule"></div>
-  <p class="what">Sixty layouts for the board in this box.</p>
+  ${face.to ? `<p class="to">To ${escapeHtml(face.to)}</p>\n  ` : ""}<p class="what">Sixty layouts for the board in this box.</p>
   <div class="qrwrap">${face.qrSvg}</div>
   <div class="paddr">
     <p class="crow"><span class="cl">Code</span><span class="cv">${face.code}</span></p>
@@ -220,6 +231,8 @@ html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:ex
 .front{padding:6mm;display:flex;flex-direction:column;align-items:center;color:#5F5A4C}
 .pk{align-self:stretch;font-family:"DM Mono",ui-monospace,monospace;font-size:2.21mm;line-height:1;letter-spacing:.28em;text-transform:uppercase;color:#7C7568}
 .pkrule{align-self:stretch;height:.26mm;background:#DED8CB;margin-top:2.08mm}
+.to{align-self:stretch;margin-top:3.2mm;font-family:"Newsreader",Georgia,serif;font-style:italic;font-variation-settings:"opsz" 20;font-size:5.6mm;line-height:1.1;color:#0F6B4B}
+.to + .what{margin-top:1.6mm}
 .what{align-self:stretch;margin-top:2.34mm;max-width:15em;font-family:"Newsreader",Georgia,serif;font-variation-settings:"opsz" 13;font-size:3.5mm;line-height:1.36;text-wrap:balance}
 .qrwrap{width:49mm;height:49mm;margin-top:3.4mm}
 .qrwrap svg{display:block;width:100%;height:100%}
@@ -301,7 +314,7 @@ function main(argv: string[]): void {
         `No usable QR for board ${n} in ${options.qr}: ${error instanceof Error ? error.message : String(error)}. Run pnpm qr:build.`,
       );
     }
-    faces.push({ n, code: entry.code, qrSvg: svg });
+    faces.push({ n, code: entry.code, qrSvg: svg, ...(options.to ? { to: options.to } : {}) });
   }
 
   mkdirSync(options.out, { recursive: true });
