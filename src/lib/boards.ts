@@ -11,7 +11,6 @@ import {
   pickUpAt,
 } from "./code";
 import { getRedis, k } from "./store";
-import { DECK_SIZE } from "./tiers";
 
 /**
  * Everything the board pages and the two route handlers share: the validators,
@@ -75,16 +74,6 @@ export type Board = {
 
 export type BoardRecord = Board & { solved: Solve[] };
 
-export type PanelRow = {
-  code: string;
-  n: number;
-  name: string;
-  solved: number;
-  furthest: number;
-  lastAt: string | null;
-  you: boolean;
-};
-
 type RawHash = Record<string, unknown> | null;
 
 // ── Derivation, all pure ────────────────────────────────────────────────────
@@ -135,17 +124,6 @@ export function summarise(solved: Solve[]): {
   return { count: solved.length, furthest, lastAt };
 }
 
-/** Furthest card first, then count, ties by name. */
-export function sortPanel(rows: PanelRow[]): PanelRow[] {
-  return [...rows].sort(
-    (a, b) =>
-      b.furthest - a.furthest ||
-      b.solved - a.solved ||
-      a.name.localeCompare(b.name) ||
-      a.code.localeCompare(b.code),
-  );
-}
-
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
@@ -169,21 +147,6 @@ export function relativeTime(iso: string | null, now: Date = new Date()): string
   return plural(Math.max(1, Math.floor(ms / (30 * DAY))), "month");
 }
 
-/**
- * `{name} · card {furthest} · {solved} of {deckSize} · {relative time}`, the
- * spec's fixed four-cell row.
- *
- * A board with nothing solved keeps the shape and fills the cell with words,
- * matching the register the time cell already uses for absence: every board
- * starts at zero, so dropping the cell would leave all four rows three cells
- * wide at launch and reshape them one at a time as people started solving.
- * There is no card 0, so the number is not an option.
- */
-export function panelRowText(row: PanelRow, now: Date = new Date()): string {
-  const furthest = row.furthest === 0 ? "no card yet" : `card ${row.furthest}`;
-  return `${row.name} · ${furthest} · ${row.solved} of ${DECK_SIZE} · ${relativeTime(row.lastAt, now)}`;
-}
-
 // ── Keys ────────────────────────────────────────────────────────────────────
 
 export const boardsKey = () => k("boards");
@@ -203,38 +166,6 @@ export async function readBoard(code: string): Promise<BoardRecord | null> {
   const board = boardFromHash(code, hash);
   if (!board) return null;
   return { ...board, solved: solvesFromHash(solvedHash) };
-}
-
-/** `SMEMBERS boards`, then one pipelined `HGETALL` pair per board. Never `KEYS`. */
-export async function readPanel(myCode: string | null): Promise<PanelRow[]> {
-  const redis = getRedis();
-  const codes = (await redis.smembers(boardsKey())).map(String).filter(isValidCode);
-  if (codes.length === 0) return [];
-  codes.sort();
-
-  const pipeline = redis.pipeline();
-  for (const code of codes) {
-    pipeline.hgetall<Record<string, unknown>>(boardKey(code));
-    pipeline.hgetall<Record<string, unknown>>(solvedKey(code));
-  }
-  const results = (await pipeline.exec()) as RawHash[];
-
-  const rows: PanelRow[] = [];
-  codes.forEach((code, i) => {
-    const board = boardFromHash(code, results[i * 2]);
-    if (!board) return;
-    const { count, furthest, lastAt } = summarise(solvesFromHash(results[i * 2 + 1]));
-    rows.push({
-      code,
-      n: board.n,
-      name: board.name,
-      solved: count,
-      furthest,
-      lastAt,
-      you: code === myCode,
-    });
-  });
-  return sortPanel(rows);
 }
 
 /** One `EXISTS`. Used before a write so a probe cannot mint a fifth board. */
