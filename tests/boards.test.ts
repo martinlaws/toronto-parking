@@ -11,7 +11,6 @@ import {
   generateCode,
   isValidCode,
   normalizeCode,
-  panelRowText,
   parseCard,
   pickUpAt,
   relativeTime,
@@ -19,9 +18,7 @@ import {
   retryAfterSeconds,
   solvedKey,
   solvesFromHash,
-  sortPanel,
   summarise,
-  type PanelRow,
 } from "../src/lib/boards";
 import { prefixFor } from "../src/lib/store";
 import { DECK_SIZE } from "../src/lib/tiers";
@@ -227,40 +224,6 @@ describe("summarise()", () => {
   });
 });
 
-function row(partial: Partial<PanelRow>): PanelRow {
-  return {
-    code: "aaaaaa",
-    n: 1,
-    name: "Alex",
-    solved: 0,
-    furthest: 0,
-    lastAt: null,
-    you: false,
-    ...partial,
-  };
-}
-
-describe("sortPanel()", () => {
-  it("sorts by furthest, then count, ties by name", () => {
-    const sorted = sortPanel([
-      row({ code: "cccccc", name: "Sam", furthest: 12, solved: 9 }),
-      row({ code: "aaaaaa", name: "Bo", furthest: 31, solved: 20 }),
-      row({ code: "dddddd", name: "Ali", furthest: 12, solved: 9 }),
-      row({ code: "bbbbbb", name: "Kit", furthest: 12, solved: 11 }),
-    ]);
-    assert.deepEqual(
-      sorted.map((entry) => entry.name),
-      ["Bo", "Kit", "Ali", "Sam"],
-    );
-  });
-
-  it("does not mutate what it was given", () => {
-    const rows = [row({ name: "Bo", furthest: 1 }), row({ name: "Ali", furthest: 9 })];
-    sortPanel(rows);
-    assert.equal(rows[0].name, "Bo");
-  });
-});
-
 describe("relativeTime()", () => {
   const now = new Date("2026-09-06T12:00:00.000Z");
   const ago = (ms: number) => new Date(now.getTime() - ms).toISOString();
@@ -284,27 +247,6 @@ describe("relativeTime()", () => {
   it("says nothing yet when there is no solve", () => {
     assert.equal(relativeTime(null, now), "nothing yet");
     assert.equal(relativeTime("not a date", now), "nothing yet");
-  });
-});
-
-describe("panelRowText()", () => {
-  const now = new Date("2026-09-06T12:00:00.000Z");
-
-  it("prints name, furthest, count and the relative time", () => {
-    assert.equal(
-      panelRowText(
-        row({ name: "Alex", furthest: 14, solved: 11, lastAt: "2026-09-06T09:00:00.000Z" }),
-        now,
-      ),
-      `Alex · card 14 · 11 of ${DECK_SIZE} · 3 hours ago`,
-    );
-  });
-
-  it("keeps the four-cell shape for a board with nothing solved", () => {
-    assert.equal(
-      panelRowText(row({ name: "Alex" }), now),
-      `Alex · no card yet · 0 of ${DECK_SIZE} · nothing yet`,
-    );
   });
 });
 

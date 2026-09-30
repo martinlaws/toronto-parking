@@ -4,7 +4,6 @@ import { Suspense } from "react";
 import BoardDeckProgress from "@/components/BoardDeckProgress";
 import BoardHeader from "@/components/BoardHeader";
 import DeckGrid from "@/components/DeckGrid";
-import FourBoards from "@/components/FourBoards";
 import StoreDown from "@/components/StoreDown";
 import { SITE_NAME } from "@/lib/site";
 
@@ -15,7 +14,8 @@ import { SITE_NAME } from "@/lib/site";
  * them in the deployment.
  *
  * The title stays the site name and the page is `noindex`, so no recipient's
- * name reaches browser history, a preview card or a crawler.
+ * name reaches browser history, a preview card or a crawler. A board's page
+ * shows that board and nothing of the other three: no names, no progress.
  */
 export const metadata: Metadata = {
   // Absolute, so the layout's `%s · Toronto Parking` template does not double it.
@@ -56,20 +56,6 @@ export default function BoardPage({ params }: PageProps<"/b/[code]">) {
       </Suspense>
 
       <DeckGrid />
-
-      <div className="mt-16">
-        <StoreDown>
-          <Suspense
-            fallback={
-              <p data-skeleton="four-boards" className="text-lg text-ink/70">
-                Reading the other boards
-              </p>
-            }
-          >
-            <FourBoards params={params} />
-          </Suspense>
-        </StoreDown>
-      </div>
     </main>
   );
 }
