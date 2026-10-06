@@ -8,7 +8,7 @@ import { SITE_URL } from "../src/lib/site";
 import { DEFAULT_FILE, validateSeedFile } from "./seed-boards";
 
 /**
- * Four QR codes, generated here rather than by a hosted service, so no third
+ * One QR code per board, generated here rather than by a hosted service, so no third
  * party ever sees the URLs. `H` error correction and a 4-module quiet zone put
  * the 30-byte payload at version 4: 33 modules, 41 with the zone, about 49 mm
  * at 1.2 mm per module.

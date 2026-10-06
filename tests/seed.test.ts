@@ -69,8 +69,9 @@ describe("validateSeedFile()", () => {
     assert.equal(result.ok && result.entries.length, 4);
   });
 
-  it("wants n an integer 1 to 4", () => {
-    for (const n of [0, 5, 1.5, "1"]) {
+  it("wants n an integer 1 to BOARD_COUNT", () => {
+    assert.equal(validateSeedFile([{ ...entry(), n: BOARD_COUNT }]).ok, true);
+    for (const n of [0, BOARD_COUNT + 1, 1.5, "1"]) {
       const result = validateSeedFile([{ ...entry(), n }]);
       assert.equal(result.ok, false, String(n));
     }
@@ -107,7 +108,9 @@ describe("validateSeedFile()", () => {
     assert.equal(validateSeedFile([]).ok, false);
     assert.equal(validateSeedFile(["nope"]).ok, false);
     assert.equal(
-      validateSeedFile([1, 2, 3, 4, 5].map((n) => entry({ n: Math.min(n, BOARD_COUNT) }))).ok,
+      validateSeedFile(
+        Array.from({ length: BOARD_COUNT + 1 }, (_, i) => entry({ n: Math.min(i + 1, BOARD_COUNT) })),
+      ).ok,
       false,
     );
   });
@@ -232,10 +235,10 @@ describe("guardKnownCodes()", () => {
     assert.equal(guardKnownCodes([entry({ code: "" })], known, false).ok, true);
   });
 
-  it("refuses a code the store has never seen, since a typo mints a fifth board", () => {
+  it("refuses a code the store has never seen, since a typo mints an extra board", () => {
     const guard = guardKnownCodes([entry({ code: "zzzzzz" })], known, false);
     assert.equal(guard.ok, false);
-    assert.ok(!guard.ok && guard.reason.includes("fifth board"));
+    assert.ok(!guard.ok && guard.reason.includes("an extra board"));
   });
 
   it("yields to an explicit --yes", () => {
