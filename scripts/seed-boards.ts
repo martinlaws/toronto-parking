@@ -18,8 +18,7 @@ export const DEFAULT_FILE = "boards.local.json";
 export const NAME_MAX = 40;
 export const DEDICATION_MAX = 280;
 /** Four boards were printed in September 2026; a fifth joined them on 2026-10-06.
- *  Raising this is the whole change on the tooling side: the board pages spell
- *  their own count, so they move only with a deploy. */
+ *  Only the tooling reads this. No board page says how many boards there are. */
 export const BOARD_COUNT = 5;
 
 export type Verb = "seed" | "ls" | "reset" | "rm";
