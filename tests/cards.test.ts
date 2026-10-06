@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { COLOURS } from "../src/lib/theme";
+
 import {
   backSlots,
   checkQrSvg,
   frontSlots,
   numberWord,
   FOLD_MARGIN,
+  SHEET_CARDS,
+  WORDS,
   foldGeometry,
   PAPER,
   parseCardArgs,
@@ -32,6 +36,8 @@ describe("parseCardArgs()", () => {
       to: "",
       from: "",
       fold: "none",
+      front: "qr",
+      explain: false,
     });
   });
 
@@ -42,8 +48,9 @@ describe("parseCardArgs()", () => {
     assert.equal(options.paper, "a4");
   });
 
-  it("refuses a board outside the four, a paper it does not know and a stray flag", () => {
-    assert.throws(() => parseCardArgs(["--board", "5"]));
+  it("refuses a board outside the five, a paper it does not know and a stray flag", () => {
+    assert.deepEqual(parseCardArgs(["--board", "5"]).boards, [5]);
+    assert.throws(() => parseCardArgs(["--board", "6"]));
     assert.throws(() => parseCardArgs(["--board", "0"]));
     assert.throws(() => parseCardArgs(["--paper", "legal"]));
     assert.throws(() => parseCardArgs(["--board"]));
@@ -166,12 +173,26 @@ describe("renderSheet()", () => {
 
     const both = renderSheet([face(2)], { back: true, paper: "letter" });
     assert.equal(both.match(/class="sheet"/g)?.length, 2);
-    assert.match(both, /Board two of four/);
+    assert.match(both, /Board two of five/);
   });
 
-  it("holds one to four cards", () => {
+  it("holds one to five cards, four to a sheet, each sheet of backs after its fronts", () => {
     assert.throws(() => renderSheet([], { back: false, paper: "letter" }));
-    assert.throws(() => renderSheet([1, 2, 3, 4, 1].map((n) => face(n)), { back: false, paper: "letter" }));
+    assert.throws(() => renderSheet([1, 2, 3, 4, 5, 1].map((n) => face(n)), { back: false, paper: "letter" }));
+    assert.equal(SHEET_CARDS, 4);
+    const five = renderSheet([1, 2, 3, 4, 5].map((n) => face(n)), { back: true, paper: "letter" });
+    const sheets = five.split('<div class="sheet">').slice(1);
+    assert.equal(sheets.length, 4);
+    assert.deepEqual(
+      sheets.map((sheet) => (sheet.match(/class="card (front|back)"/g) ?? []).join(" ")),
+      [
+        'class="card front" '.repeat(4).trim(),
+        'class="card back" '.repeat(4).trim(),
+        'class="card front"',
+        'class="card back"',
+      ],
+    );
+    assert.match(five, /Board five of five/);
   });
 
   it("follows the repo's copy rules", () => {
@@ -183,9 +204,9 @@ describe("renderSheet()", () => {
 });
 
 describe("helpers", () => {
-  it("names the four boards", () => {
-    assert.deepEqual([1, 2, 3, 4].map(numberWord), ["one", "two", "three", "four"]);
-    assert.throws(() => numberWord(5));
+  it("names the five boards", () => {
+    assert.deepEqual([1, 2, 3, 4, 5].map(numberWord), ["one", "two", "three", "four", "five"]);
+    assert.throws(() => numberWord(6));
   });
 
   it("accepts the QR make-qr writes and nothing with a script in it", () => {
@@ -193,5 +214,101 @@ describe("helpers", () => {
     assert.throws(() => checkQrSvg("<html></html>"));
     assert.throws(() => checkQrSvg('<svg onload="x()"></svg>'));
     assert.throws(() => checkQrSvg("<svg><script>x()</script></svg>"));
+  });
+});
+
+describe("--explain", () => {
+  it("is off unless asked, and the short front is what boards 2 and 3 were printed with", () => {
+    assert.equal(parseCardArgs([]).explain, false);
+    assert.equal(parseCardArgs(["--explain"]).explain, true);
+    const html = renderSheet([face(2)], { back: false, paper: "letter" });
+    assert.match(html, /<p class="what">I made you a puzzle\.<br>Scan this for sixty ways to play it\.<\/p>/);
+    assert.doesNotMatch(html, /explain|Mark them solved/);
+  });
+
+  it("swaps in four lines, one sentence each, under the same QR", () => {
+    const html = renderSheet([face(2)], { back: false, paper: "letter", explain: true });
+    assert.match(html, new RegExp(`<p class="what explain">${WORDS.explain.map((line) => `<span>${line}</span>`).join("")}</p>`));
+    assert.match(html, /\.what\.explain span\{display:block/);
+    assert.match(html, /\.qrwrap\{width:49mm;height:49mm/);
+    assert.ok(html.includes(QR));
+  });
+
+  it("says only what the board page does", () => {
+    const text = WORDS.explain.join(" ");
+    assert.match(text, /sixty setups/);
+    assert.match(text, /Mark them solved/);
+    assert.match(text, /get the red one out/);
+  });
+
+  it("refuses a To line on the QR panel, which it has no room for", () => {
+    assert.throws(() => parseCardArgs(["--board", "4", "--explain", "--to", "Wren"]), /--to/);
+    assert.equal(parseCardArgs(["--board", "4", "--explain", "--fold=quarter"]).explain, true);
+  });
+});
+
+describe("--front birthday", () => {
+  const card = (to?: string) =>
+    renderFoldSheet([{ ...face(5), ...(to ? { to } : {}), from: "Martin" }], "letter", "quarter", { front: "birthday" });
+
+  it("parses, and only as a quarter fold, which is the one with a printed inside", () => {
+    assert.equal(parseCardArgs(["--front", "birthday", "--fold", "quarter"]).front, "birthday");
+    assert.equal(parseCardArgs(["--front=birthday", "--fold=quarter"]).front, "birthday");
+    assert.throws(() => parseCardArgs(["--front", "birthday"]), /--fold quarter/);
+    assert.throws(() => parseCardArgs(["--front", "birthday", "--fold", "half"]), /--fold quarter/);
+    assert.throws(() => parseCardArgs(["--front", "party", "--fold", "quarter"]));
+    assert.equal(parseCardArgs(["--board", "5", "--to", "Wren", "--front", "birthday", "--fold", "quarter"]).to, "Wren");
+    assert.throws(() => renderFoldSheet([face(5)], "letter", "half", { front: "birthday" }));
+  });
+
+  it("puts balloons and the greeting on the cover, with no QR and no code there", () => {
+    const html = card("Wren & <Co>");
+    const cover = html.slice(html.indexOf('class="card cover"'));
+    assert.match(cover, /<p class="hb">Happy birthday, Wren &amp; &lt;Co&gt;\.<\/p>/);
+    assert.equal(cover.match(/<path d="M0 [^"]*Z" fill="#[0-9A-F]{6}" stroke="#[0-9A-F]{6}"/g)?.length, 3);
+    assert.doesNotMatch(cover, /qrwrap|wren1y/);
+    assert.match(card(), /<p class="hb">Happy birthday\.<\/p>/);
+  });
+
+  it("draws the balloons in the piece colours", () => {
+    const html = card("Wren");
+    for (const colour of [COLOURS.carBlue, COLOURS.carYellow, COLOURS.hero]) assert.ok(html.includes(`fill="${colour}"`));
+  });
+
+  it("moves the QR panel inside, upside down on the top half, with the explain lines and no To line", () => {
+    const html = card("Wren");
+    const g = foldGeometry("letter", "quarter");
+    assert.deepEqual(g.inside.right, { x: 107.95, y: 0 });
+    const inside = html.slice(html.indexOf('class="inside"'), html.indexOf('class="card back"'));
+    assert.match(html, /\.inside\{position:absolute;left:0;top:0;transform:rotate\(180deg\)\}/);
+    assert.match(inside, /style="width:215\.9mm;height:139\.7mm"/);
+    assert.match(inside, /class="panel" style="left:118\.34mm;top:8mm;/);
+    assert.ok(inside.includes(QR));
+    assert.match(inside, /<span class="cv">wren1y<\/span>/);
+    assert.match(inside, /<p class="what explain">/);
+    assert.match(inside, /<p class="pk">From Martin<\/p>/);
+    assert.doesNotMatch(inside, /class="to"|Wren/);
+    assert.equal(html.match(/class="qrwrap"/g)?.length, 1);
+  });
+
+  it("keeps the back and the cover on the bottom half, back on the left", () => {
+    const html = card("Wren");
+    assert.match(html, /class="panel" style="left:10\.39mm;top:147\.7mm;[^"]*">\n<section class="card back"/);
+    assert.match(html, /class="panel" style="left:118\.34mm;top:147\.7mm;[^"]*">\n<section class="card cover"/);
+    assert.match(html, /Board five of five/);
+  });
+
+  it("adds nothing to a card that does not ask for it", () => {
+    const plain = renderFoldSheet([face(4)], "letter", "quarter");
+    assert.doesNotMatch(plain, /inside|cover|balloons|explain|birthday/);
+  });
+
+  it("follows the repo's copy rules", () => {
+    const text = card("Wren")
+      .replace(/<style>[\s\S]*?<\/style>/, "")
+      .replace(/<[^>]+>/g, " ");
+    assert.doesNotMatch(text, /!/);
+    assert.doesNotMatch(text, /Rush Hour|Marty|fortnight/i);
+    assert.ok((WORDS.explain.join(" ").match(/\u2014/g) ?? []).length <= 1);
   });
 });
