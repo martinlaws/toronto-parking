@@ -17,7 +17,10 @@ export const DEFAULT_FILE = "boards.local.json";
 
 export const NAME_MAX = 40;
 export const DEDICATION_MAX = 280;
-export const BOARD_COUNT = 4;
+/** Four boards were printed in September 2026; a fifth joined them on 2026-10-06.
+ *  Raising this is the whole change on the tooling side: the board pages spell
+ *  their own count, so they move only with a deploy. */
+export const BOARD_COUNT = 5;
 
 export type Verb = "seed" | "ls" | "reset" | "rm";
 
@@ -193,7 +196,7 @@ export function guardKnownCodes(entries: SeedEntry[], known: Set<string>, yes: b
   if (strays.length === 0) return OK;
   return {
     ok: false,
-    reason: `${strays.map((entry) => entry.code).join(", ")} is not in the boards set. A typo here would mint a fifth board. Pass --yes if the code is right.`,
+    reason: `${strays.map((entry) => entry.code).join(", ")} is not in the boards set. A typo here would mint an extra board. Pass --yes if the code is right.`,
   };
 }
 
@@ -206,8 +209,8 @@ export type ExistingBoard = { n: number; code: string; name: string };
  * `boards.local.json` rebuilt from the example passes every other guard and
  * mints a second board on all four numbers, which the panel then renders twice.
  *
- * No separate count is needed: `n` is already 1 to `BOARD_COUNT`, so a fifth
- * board cannot appear without repeating a number the store holds.
+ * No separate count is needed: `n` is already 1 to `BOARD_COUNT`, so a board
+ * past that count cannot appear without repeating a number the store holds.
  */
 export function guardNewBoards(
   entries: SeedEntry[],
