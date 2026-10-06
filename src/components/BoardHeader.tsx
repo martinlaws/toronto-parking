@@ -35,15 +35,17 @@ export default async function BoardHeader({
   // A board with no dedication is the maker's own copy. It gets no greeting;
   // the register line carries the title instead, split so the display face
   // holds a short line and the sign-off stays body-sized.
+  //
+  // No page says which board it is or how many there are (Martin,
+  // 2026-10-06): the count stopped being four, and the line went rather than
+  // the number changing.
   if (board.dedication === "") {
     return (
       <header data-board={board.code}>
         <h1 className="font-display text-4xl font-extrabold tracking-tight sm:text-5xl">
-          Board {board.n} of 4.
+          Printed in Toronto, {PRINTED}.
         </h1>
-        <p className="mt-3 max-w-xl text-lg text-ink/70">
-          Printed in Toronto, {PRINTED}. — Martin
-        </p>
+        <p className="mt-3 max-w-xl text-lg text-ink/70">— Martin</p>
         <BoardClaim code={board.code} n={board.n} name={board.name} />
       </header>
     );
@@ -64,7 +66,7 @@ export default async function BoardHeader({
       </h1>
       <p className="mt-3 max-w-xl text-lg text-ink/70">{board.dedication}</p>
       <p className="mt-3 max-w-xl text-lg text-ink/70">
-        Board {board.n} of 4. Printed in Toronto, {PRINTED}. — Martin
+        Printed in Toronto, {PRINTED}. — Martin
       </p>
       <BoardClaim code={board.code} n={board.n} name={board.name} />
     </header>
