@@ -31,6 +31,8 @@ import { BOARD_COUNT, DEFAULT_FILE, validateSeedFile } from "./seed-boards";
  * stays blank for a note. The inside is the top half of the sheet printed
  * upside down, which the two folds turn the right way up.
  *
+ * `--blank-back` leaves a folded card's back panel as white paper.
+ *
  * Output goes to the gitignored `out/cards/`. Print at 100%, never "fit".
  */
 
@@ -60,6 +62,7 @@ export type CardOptions = {
   fold: Fold;
   front: Front;
   explain: boolean;
+  blankBack: boolean;
 };
 
 export type Fold = "none" | "half" | "quarter";
@@ -104,6 +107,7 @@ export function parseCardArgs(argv: string[]): CardOptions {
     fold: "none",
     front: "qr",
     explain: false,
+    blankBack: false,
   };
   const value =(token: string, name: string, next: () => string | undefined): string => {
     const inline = token.startsWith(`${name}=`) ? token.slice(name.length + 1) : undefined;
@@ -129,6 +133,7 @@ export function parseCardArgs(argv: string[]): CardOptions {
       options.fold = fold;
     }
     else if (name === "--explain") options.explain = true;
+    else if (name === "--blank-back") options.blankBack = true;
     else if (name === "--front") {
       const front = value(token, name, next);
       if (front !== "qr" && front !== "birthday") throw new Error(`--front is qr or birthday, not ${front}`);
@@ -155,6 +160,9 @@ export function parseCardArgs(argv: string[]): CardOptions {
     throw new Error(
       "--explain takes the room the --to line needs on the QR panel. Drop --to, or use --front birthday, which puts the name on the cover",
     );
+  }
+  if (options.blankBack && options.fold === "none") {
+    throw new Error("--blank-back is for a folded card; an A7 card has no back unless --back asks for one");
   }
   if (options.front === "birthday" && options.fold !== "quarter") {
     throw new Error("--front birthday puts the QR inside, so it needs --fold quarter");
@@ -475,7 +483,7 @@ export function renderFoldSheet(
   faces: CardFace[],
   paper: Paper,
   fold: Exclude<Fold, "none"> = "half",
-  options: { front?: Front; explain?: boolean } = {},
+  options: { front?: Front; explain?: boolean; blankBack?: boolean } = {},
 ): string {
   if (faces.length === 0 || faces.length > BOARD_COUNT) {
     throw new Error(`A run holds 1 to ${BOARD_COUNT} cards`);
@@ -489,11 +497,11 @@ export function renderFoldSheet(
 ${inner}
 </div>`;
   const origin = { x: 0, y: 0 };
+  const backPanel = (face: CardFace) => (options.blankBack ? "" : `${panel(g.back, back(face, origin, g.cardH, 0))}\n`);
   const sheets = faces.map((face) => {
     if (!birthday) {
       return `<div class="sheet">
-${panel(g.back, back(face, origin, g.cardH, 0))}
-${panel(g.front, front(face, origin, g.cardH, explain))}
+${backPanel(face)}${panel(g.front, front(face, origin, g.cardH, explain))}
 </div>`;
     }
     // The greeting is on the cover, so the QR panel inside carries no To line.
@@ -502,8 +510,7 @@ ${panel(g.front, front(face, origin, g.cardH, explain))}
 <div class="inside" style="width:${mm(g.sheet.w)};height:${mm(g.panel.h)}">
 ${panel(g.inside.right, front(inside, origin, g.cardH, true))}
 </div>
-${panel(g.back, back(face, origin, g.cardH, 0))}
-${panel(g.front, cover(face, origin, g.cardH))}
+${backPanel(face)}${panel(g.front, cover(face, origin, g.cardH))}
 </div>`;
   });
   return documentOf(sheets.join("\n"), styles(paper, fold, { explain, birthday }));
@@ -573,7 +580,11 @@ function main(argv: string[]): void {
     path,
     options.fold === "none"
       ? renderSheet(faces, options)
-      : renderFoldSheet(faces, options.paper, options.fold, { front: options.front, explain: options.explain }),
+      : renderFoldSheet(faces, options.paper, options.fold, {
+          front: options.front,
+          explain: options.explain,
+          blankBack: options.blankBack,
+        }),
     "utf8",
   );
   const how =

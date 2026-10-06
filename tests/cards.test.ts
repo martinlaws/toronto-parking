@@ -38,6 +38,7 @@ describe("parseCardArgs()", () => {
       fold: "none",
       front: "qr",
       explain: false,
+      blankBack: false,
     });
   });
 
@@ -310,5 +311,23 @@ describe("--front birthday", () => {
     assert.doesNotMatch(text, /!/);
     assert.doesNotMatch(text, /Rush Hour|Marty|fortnight/i);
     assert.ok((WORDS.explain.join(" ").match(/\u2014/g) ?? []).length <= 1);
+  });
+});
+
+describe("--blank-back", () => {
+  it("parses for a folded card only", () => {
+    assert.equal(parseCardArgs(["--blank-back", "--fold", "quarter"]).blankBack, true);
+    assert.equal(parseCardArgs(["--blank-back", "--fold=half"]).blankBack, true);
+    assert.throws(() => parseCardArgs(["--blank-back"]), /folded card/);
+  });
+
+  it("leaves the back panel off and keeps everything else", () => {
+    for (const front of ["qr", "birthday"] as const) {
+      const html = renderFoldSheet([{ ...face(5), to: "Wren" }], "letter", "quarter", { front, blankBack: true });
+      assert.doesNotMatch(html, /class="card back"|Board five/);
+      assert.match(html, front === "birthday" ? /class="card cover"/ : /class="card front"/);
+      assert.ok(html.includes(QR));
+    }
+    assert.match(renderFoldSheet([face(4)], "letter", "quarter"), /class="card back"/);
   });
 });
